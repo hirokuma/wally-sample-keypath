@@ -1,0 +1,469 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <wally_core.h>
+#include <wally_crypto.h>
+#include <wally_address.h>
+#include <wally_bip32.h>
+#include <wally_bip39.h>
+#include <wally_script.h>
+
+#include "conf.h"
+
+#include "address.h"
+#include "log.h"
+#include "misc.h"
+#include "wallet.h"
+
+/////////////////////////////////////////////////
+// Macros
+/////////////////////////////////////////////////
+
+#define PASSPHRASE      ""
+#define MNEMONIC_WORDS  (12)
+
+#define WALLET_FILENAME         "mnemonic.wlt"
+#define WALLET_INDEX_FILENAME   "index.wlt"
+
+#if defined(MAINNET)
+#   error "mainnet not supported"
+#else
+#   define WALLET_VER      BIP32_VER_TEST_PRIVATE
+#endif
+
+// m / purpose' / coin_type' / account' / change / address_index
+// purpose = 44, 49, 84
+// coin_type = 0(mainnet), 1(testnet)
+#define WALLET_PATH     "m/86'/1'/0'/*" // P2TR only
+
+#if MNEMONIC_WORDS == 12
+#   define  ENTROPY_LEN    (BIP39_ENTROPY_LEN_128)
+#elif MNEMONIC_WORDS == 24
+#   define  ENTROPY_LEN    (BIP39_ENTROPY_LEN_256)
+#else
+#   error "invalid MNEMONIC_WORDS"
+#endif
+
+#define MNEMONIC_STR_MAX    (MNEMONIC_WORDS * 10)
+
+/////////////////////////////////////////////////
+// Types
+/////////////////////////////////////////////////
+
+struct wallet_set {
+    struct ext_key hdkey;
+    uint32_t next_index;
+};
+
+struct wallet_data {
+    struct wallet_set ws[2];
+};
+
+/////////////////////////////////////////////////
+// Global variables
+/////////////////////////////////////////////////
+
+static struct wallet_data opened_wallet;
+
+/////////////////////////////////////////////////
+// Prototype definitions
+/////////////////////////////////////////////////
+
+static int create_or_load_wallet(char **mnemonic, struct wallet_data *wd);
+static int load_mnemonic_file(char **mnemonic, struct wallet_data *wd);
+static int create_mnemonic_file(char **mnemonic, struct wallet_data *wd);
+static int load_index_file(struct wallet_data *wd);
+static int save_index_file(struct wallet_data *wd);
+static int create_masterkey(struct ext_key *hdkey, const char *mnemonic);
+static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws);
+static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey, uint32_t index);
+static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey);
+static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t len, const struct ext_key *addr_hdkey);
+
+/////////////////////////////////////////////////
+// Public functions
+/////////////////////////////////////////////////
+
+int wallet_init(void)
+{
+    int rc;
+    char *mnemonic;
+    struct ext_key parent_hdkey;
+
+    rc = create_or_load_wallet(&mnemonic, &opened_wallet);
+    if (rc != 0) {
+        LOGE("error: create_or_load_wallet fail: %d", rc);
+        goto exit;
+    }
+
+    rc = create_masterkey(&parent_hdkey, mnemonic);
+    (void)wally_free_string(mnemonic); // clear and free
+    if (rc != 0) {
+        LOGE("error: create_bip32key fail: %d", rc);
+        goto exit;
+    }
+
+    rc = bip32_key_from_parent_path_str(
+        &parent_hdkey,
+        WALLET_PATH, 0,
+        BIP32_FLAG_STR_WILDCARD,
+        &opened_wallet.ws[WALLET_KEYS_EXTN].hdkey);
+    if (rc != WALLY_OK) {
+        LOGE("error: bip32_key_from_parent_path_str(extn) fail: %d", rc);
+        goto exit;
+    }
+
+    rc = bip32_key_from_parent_path_str(
+        &parent_hdkey,
+        WALLET_PATH, 1,
+        BIP32_FLAG_STR_WILDCARD,
+        &opened_wallet.ws[WALLET_KEYS_INTR].hdkey);
+    if (rc != WALLY_OK) {
+        LOGE("error: bip32_key_from_parent_path_str(intr) fail: %d", rc);
+        goto exit;
+    }
+
+exit:
+    return rc;
+}
+
+int wallet_get_address(struct wallet_address *wa, int *done)
+{
+    int rc;
+
+    *done = 0;
+    if (wa->keys_type == WALLET_KEYS_EXTN) {
+        if (wa->index == opened_wallet.ws[WALLET_KEYS_EXTN].next_index) {
+            LOGT("to intr address");
+            wa->keys_type = WALLET_KEYS_INTR;
+            wa->index = 0;
+        }
+    }
+    if (wa->keys_type == WALLET_KEYS_INTR) {
+        if (wa->index == opened_wallet.ws[WALLET_KEYS_INTR].next_index) {
+            LOGT("done");
+            *done = 1;
+            return 0;
+        }
+    }
+
+    struct ext_key addr_hdkey;
+    rc = get_addr_hdkey(&addr_hdkey, &opened_wallet.ws[wa->keys_type].hdkey, wa->index);
+    if (rc != 0) {
+        LOGE("error: get_addr_hdkey fail: %d", rc);
+        return 1;
+    }
+    rc = get_address(wa->address, &addr_hdkey);
+    if (rc == 0) {
+        wa->index++;
+    }
+    return rc;
+}
+
+int wallet_new_extr_address(char address[ADDRESS_STR_MAX])
+{
+    return new_address(address, &opened_wallet.ws[WALLET_KEYS_EXTN]);
+}
+
+int wallet_new_intr_address(char address[ADDRESS_STR_MAX])
+{
+    return new_address(address, &opened_wallet.ws[WALLET_KEYS_INTR]);
+}
+
+// TODO 今のところP2TR専用
+int wallet_search_scriptpubkey(int *detect, struct ext_key *hdkey, const uint8_t *scriptpubkey, size_t len)
+{
+    int rc;
+    uint8_t spk[WALLY_SCRIPTPUBKEY_P2TR_LEN];
+    struct ext_key addr_hdkey;
+
+    *detect = 0;
+    if (len != WALLY_SCRIPTPUBKEY_P2TR_LEN) {
+        LOGT("not same length");
+        return 0;
+    }
+
+    for (int chgkey_index = 0; chgkey_index < WALLET_KEYS_NUM; chgkey_index++) {
+        struct wallet_set *ws = &opened_wallet.ws[chgkey_index];
+        if (ws->next_index > 0) {
+            for (uint32_t index = 0; index < ws->next_index; index++) {
+                rc = get_addr_hdkey(&addr_hdkey, &ws->hdkey, index);
+                if (rc != 0) {
+                    LOGE("error: get_addr_hdkey fail: %d", rc);
+                    return 1;
+                }
+                rc = get_scriptpubkey_from_hdkey(spk, sizeof(spk), &addr_hdkey);
+                if (rc != WALLY_OK) {
+                    LOGE("error: get_scriptpubkey_from_hdkey fail: %d", rc);
+                    return 1;
+                }
+                if (memcmp(spk, scriptpubkey, len) == 0) {
+                    LOGT("detect!");
+                    *detect = 1;
+                    if (hdkey != NULL) {
+                        memcpy(hdkey, &addr_hdkey, sizeof(struct ext_key));
+                    }
+                    return 0;
+                }
+            }
+        }
+    }
+    LOGT("not match");
+    return 0;
+}
+
+/////////////////////////////////////////////////
+// Private functions
+/////////////////////////////////////////////////
+
+static int create_or_load_wallet(char **mnemonic, struct wallet_data *wd)
+{
+    int rc;
+    int rc_stat;
+    struct stat st;
+
+    rc_stat = stat(WALLET_FILENAME, &st);
+    if (rc_stat == 0) {
+        rc = load_mnemonic_file(mnemonic, wd);
+    } else {
+        rc = create_mnemonic_file(mnemonic, wd);
+    }
+    if (rc != 0) {
+        LOGE("error: create_or_load_wallet(mnemonic) fail: %d", rc);
+        return rc;
+    }
+
+    if (rc_stat == 0) {
+        rc = load_index_file(wd);
+    } else {
+        wd->ws[WALLET_KEYS_EXTN].next_index = 0;
+        wd->ws[WALLET_KEYS_INTR].next_index = 0;
+        rc = save_index_file(wd);
+    }
+    if (rc != 0) {
+        LOGE("error: create_or_load_wallet(index) fail: %d", rc);
+        return rc;
+    }
+
+    return rc;
+}
+
+static int load_mnemonic_file(char **mnemonic, struct wallet_data *wd)
+{
+    int rc;
+    char *wp; // work pointer
+
+    *mnemonic = (char *)wally_malloc(MNEMONIC_STR_MAX);
+    if (!*mnemonic) {
+        LOGE("error: wally_malloc failed");
+        return 1;
+    }
+
+    FILE *fp = fopen(WALLET_FILENAME, "r");
+    if (fp == NULL) {
+        LOGE("error: fopen for reading failed");
+        goto exit;
+    }
+    wp = fgets(*mnemonic, MNEMONIC_STR_MAX, fp);
+    fclose(fp);
+    if (wp == NULL) {
+        LOGE("error: fgets failed");
+        goto exit;
+    }
+    wp = strchr(*mnemonic, '\n');
+    if (wp) {
+        *wp = '\0';
+    }
+
+    rc = bip39_mnemonic_validate(NULL, *mnemonic);
+    if (rc != WALLY_OK) {
+        LOGE("error: invalid mnemonic(%s)", *mnemonic);
+        goto exit;
+    }
+    return 0;
+
+exit:
+    if (*mnemonic) {
+        (void)wally_free_string(*mnemonic); // clear and free
+        *mnemonic = NULL;
+    }
+    return 1;
+}
+
+static int create_mnemonic_file(char **mnemonic, struct wallet_data *wd)
+{
+    int rc;
+    uint8_t ent[ENTROPY_LEN];
+
+    rc = fill_random(ent, sizeof(ent));
+    if (rc != 0) {
+        LOGE("error: fill_random fail: %d", rc);
+        return 1;
+    }
+
+    rc = bip39_mnemonic_from_bytes(NULL, ent, sizeof(ent), mnemonic);
+    if (rc != WALLY_OK) {
+        LOGE("error: bip39_mnemonic_from_bytes fail: %d", rc);
+        return 1;
+    }
+
+    // Dangerous!! Only test!!
+    FILE *fp = fopen(WALLET_FILENAME, "w");
+    if (fp == NULL) {
+        LOGE("error: fopen for writing failed");
+        goto exit;
+    }
+    fprintf(fp, "%s\n# %s", *mnemonic, WALLET_PATH);
+    fclose(fp);
+
+    return 0;
+
+exit:
+    if (*mnemonic) {
+        (void)wally_free_string(*mnemonic);
+        *mnemonic = NULL;
+    }
+    return 1;
+}
+
+static int load_index_file(struct wallet_data *wd)
+{
+    int rc;
+
+    FILE *fp = fopen(WALLET_INDEX_FILENAME, "r");
+    if (fp == NULL) {
+        LOGE("error: fopen for reading failed");
+        return 1;
+    }
+    rc = fscanf(fp, "%u %u", &wd->ws[WALLET_KEYS_EXTN].next_index, &wd->ws[WALLET_KEYS_INTR].next_index);
+    fclose(fp);
+
+    if (rc != 2) {
+        LOGE("error: fscanf failed");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int save_index_file(struct wallet_data *wd)
+{
+    FILE *fp = fopen(WALLET_INDEX_FILENAME, "w");
+    if (fp == NULL) {
+        LOGE("error: fopen for writing failed");
+        return 1;
+    }
+    fprintf(fp, "%u %u", wd->ws[WALLET_KEYS_EXTN].next_index, wd->ws[WALLET_KEYS_INTR].next_index);
+    fclose(fp);
+
+    return 0;
+}
+
+static int create_masterkey(struct ext_key *hdkey, const char *mnemonic)
+{
+    int rc;
+
+    uint8_t seed[BIP39_SEED_LEN_512];
+    size_t written;
+    rc = bip39_mnemonic_to_seed(mnemonic, PASSPHRASE, seed, sizeof(seed), &written);
+    if (rc != WALLY_OK || written != BIP39_SEED_LEN_512) {
+        LOGE("error: bip39_mnemonic_to_seed fail: %d(written=%zu)", rc, written);
+        return 1;
+    }
+
+    rc = bip32_key_from_seed(seed, sizeof(seed), WALLET_VER, 0, hdkey);
+    if (rc != WALLY_OK) {
+        LOGE("error: bip32_key_from_seed fail: %d", rc);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws)
+{
+    int rc;
+    struct ext_key addr_hdkey;
+
+    rc = get_addr_hdkey(&addr_hdkey, &ws->hdkey, ws->next_index);
+    if (rc != 0) {
+        LOGE("error: get_addr_hdkey fail: %d", rc);
+        return 1;
+    }
+
+    rc = get_address(address, &addr_hdkey);
+    if (rc != 0) {
+        LOGE("error: get_address fail: %d", rc);
+        return 1;
+    }
+
+    ws->next_index++;
+    rc = save_index_file(&opened_wallet);
+    if (rc != 0) {
+        LOGE("error: save_index_file fail: %d", rc);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey, uint32_t index)
+{
+    int rc;
+
+    rc = bip32_key_from_parent(chg_hdkey, index, BIP32_FLAG_KEY_PRIVATE, hdkey);
+    if (rc != WALLY_OK) {
+        LOGE("error: bip32_key_from_parent fail: %d", rc);
+        return 1;
+    }
+    if (hdkey->priv_key[0] != BIP32_FLAG_KEY_PRIVATE) {
+        LOGE("err: hdkey.priv_key[0] != BIP32_FLAG_KEY_PRIVATE");
+        return 1;
+    }
+
+    return 0;
+}
+
+
+static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey)
+{
+    int rc;
+
+    uint8_t scriptpubkey[WALLY_SCRIPTPUBKEY_P2TR_LEN];
+    rc = get_scriptpubkey_from_hdkey(scriptpubkey, sizeof(scriptpubkey), addr_hdkey);
+    if (rc != 0) {
+        LOGE("error: get_scriptpubkey_from_hdkey fail: %d", rc);
+        return 1;
+    }
+
+    rc = address_from_scriptpubkey(address, scriptpubkey, sizeof(scriptpubkey));
+    if (rc != 0) {
+        LOGE("error: address_from_scriptpubkey fail: %d", rc);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t len, const struct ext_key *addr_hdkey)
+{
+    int rc;
+    const uint8_t *pubkey = addr_hdkey->pub_key;
+
+    size_t written;
+    rc = wally_scriptpubkey_p2tr_from_bytes(
+        pubkey, EC_PUBLIC_KEY_LEN,
+        0, scriptpubkey, len, &written);
+    if (rc != WALLY_OK || written != len) {
+        LOGE("error: wally_scriptpubkey_p2tr_from_bytes fail: %d", rc);
+        return 1;
+    }
+
+    return 0;
+}

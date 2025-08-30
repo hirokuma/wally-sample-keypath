@@ -1,5 +1,9 @@
 # key path
 
+## NOTICE
+
+This application is intended for Regtest use only.  
+No security measures have been implemented.
 
 ## prepare
 
@@ -38,3 +42,41 @@ git clone https://github.com/hirokuma/wally-sample-keypath.git
 cd wally-sample-keypath
 make
 ```
+
+## Run
+
+### conf
+
+`settings.conf`
+
+```file
+network=regtest
+```
+
+### Get new address
+
+```bash
+./tst newaddr
+```
+
+### Get addresses created by this wallet
+
+```bash
+./tst addr
+```
+
+### Decode raw transaction
+
+```bash
+./tst <raw transaction>
+```
+
+## メモ
+
+* ✅ウォレットデータをファイルに持つ
+* ✅設定ファイルを持つ
+* ✅INPUTトランザクションデータ(TXIDだけではなく全部)をもらって
+  * ✅デコード
+  * ✅scriptPubKey が今開いているウォレットかどうか調べる
+* 鍵を持っているならアドレスをもらってspendするトランザクションを作る
+* スクリプトをsatisfyしてspendするトランザクションを作る

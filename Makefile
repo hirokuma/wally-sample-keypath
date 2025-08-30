@@ -4,13 +4,17 @@ OUTPUT_BINARY_DIRECTORY = .
 # source files
 C_DIRECTORY = ./src
 C_FILES += \
+	src/address.c \
+	src/conf.c \
 	src/misc.c \
+	src/tx.c \
+	src/wallet.c \
 	src/main.c
 
 # object files
 OBJECT_DIRECTORY = _build
 
-CFLAGS += --std=gnu99 -Wall
+CFLAGS += --std=gnu99 -Wall -MMD -MP
 CFLAGS += -Isrc/include
 
 PKG_CONF_LIBS=\
@@ -55,9 +59,7 @@ SIZE    		:= "$(GNU_PREFIX)size"
 rmdup = $(strip $(if $1,$(firstword $1) $(call rmdup,$(filter-out $(firstword $1),$1))))
 
 #building all targets
-all:
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e cleanobj
-	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e debug
+all: debug
 
 #target for printing all targets
 help:
@@ -70,6 +72,7 @@ C_SOURCE_FILE_NAMES = $(notdir $(C_SOURCE_FILES))
 C_PATHS = $(call rmdup, $(dir $(C_SOURCE_FILES)))
 
 C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_FILES:.c=.o))
+DEPS = $(C_OBJECTS:.o=.d)
 OBJECTS = $(C_OBJECTS)
 OBJECTS_DIRECTORIES = $(call rmdup, $(dir $(OBJECTS)))
 
@@ -81,16 +84,11 @@ vpath %.c $(C_PATHS)
 debug: CFLAGS += -DDEBUG
 debug: CFLAGS += -ggdb3 -O0
 debug: LDFLAGS += -ggdb3 -O0
-debug: $(BUILD_DIRECTORIES) $(OBJECTS)
-	@echo [DEBUG]Linking target: $(OUTPUT_FILENAME)
-	@echo [DEBUG]CFLAGS=$(CFLAGS)
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
+debug: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
 
 release: CFLAGS += -DNDEBUG -O3
 release: LDFLAGS += -O3
-release: $(BUILD_DIRECTORIES) $(OBJECTS)
-	@echo [RELEASE]Linking target: $(OUTPUT_FILENAME)
-	$(NO_ECHO)$(CC) $(OBJECTS) $(LDFLAGS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
+release: $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
 
 ## Create build directories
 $(BUILD_DIRECTORIES):
@@ -99,12 +97,18 @@ $(BUILD_DIRECTORIES):
 # Create objects from C SRC files
 $(OBJECT_DIRECTORY)/%.o: %.c
 	@echo Compiling C file: $(notdir $<): $(CFLAGS)
-	$(NO_ECHO)$(CC) $(CFLAGS) $(INC_PATHS) -c -o $@ $<
+	$(NO_ECHO)$(CC) $(CFLAGS) -c -o $@ $<
 
 # Link
 $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME): $(BUILD_DIRECTORIES) $(OBJECTS)
 	@echo Linking target: $(OUTPUT_FILENAME)
 	$(NO_ECHO)$(CC) $(OBJECTS) $(LDFLAGS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
+
+memcheck:
+	valgrind --leak-check=full $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
+
+# Include dependency files
+-include $(DEPS)
 
 clean:
 	$(RM) $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME)
