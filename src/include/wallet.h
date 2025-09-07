@@ -54,7 +54,7 @@ int wallet_new_extr_address(char address[ADDRESS_STR_MAX]);
 /// @brief Retrieve an internal wallet address.
 /// @param address A buffer that will be populated with the internal wallet address.
 /// @return 0 on success, non-zero on failure.
-int wallet_new_intr_address(char address[ADDRESS_STR_MAX]);
+int wallet_new_intr_address(char address[ADDRESS_STR_MAX], uint8_t *scriptpubkey, size_t *len);
 
 int wallet_search_scriptpubkey(int *detect, struct ext_key *hdkey, const uint8_t *scriptpubkey, size_t len);
 

@@ -21,6 +21,8 @@ DECLARE_FAKE_VALUE_FUNC(int, bip39_mnemonic_to_seed, const char *, const char *,
 DECLARE_FAKE_VALUE_FUNC(int, bip39_mnemonic_validate, const struct words *, const char *);
 DECLARE_FAKE_VALUE_FUNC(void *, wally_malloc, size_t);
 DECLARE_FAKE_VALUE_FUNC(int, wally_addr_segwit_from_bytes, const unsigned char *, size_t, const char *, uint32_t, char **);
+DECLARE_FAKE_VALUE_FUNC(int, wally_addr_segwit_to_bytes, const char *, const char *, uint32_t, unsigned char *, size_t, size_t *);
+DECLARE_FAKE_VALUE_FUNC(int, wally_address_to_scriptpubkey, const char *, uint32_t, unsigned char *, size_t, size_t *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_free_string, char *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_p2tr_from_bytes, const unsigned char *, size_t, uint32_t, unsigned char *, size_t, size_t *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_get_type, const unsigned char *, size_t, size_t *);

@@ -54,6 +54,6 @@ TEST_F(TestWallet, get_address)
     struct ext_key hdkey;
     char address[ADDRESS_STR_MAX];
 
-    rc = get_address(address, &hdkey, 0);
+    rc = get_address(address, &hdkey);
     ASSERT_EQ(rc, 1);
 }

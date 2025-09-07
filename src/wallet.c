@@ -81,10 +81,10 @@ static int create_mnemonic_file(char **mnemonic, struct wallet_data *wd);
 static int load_index_file(struct wallet_data *wd);
 static int save_index_file(struct wallet_data *wd);
 static int create_masterkey(struct ext_key *hdkey, const char *mnemonic);
-static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws);
+static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws, uint8_t *scriptpubkey, size_t *len);
 static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey, uint32_t index);
-static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey);
-static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t len, const struct ext_key *addr_hdkey);
+static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey, uint8_t *scriptpubkey, size_t *len);
+static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t *len, const struct ext_key *addr_hdkey);
 
 /////////////////////////////////////////////////
 // Public functions
@@ -159,7 +159,7 @@ int wallet_get_address(struct wallet_address *wa, int *done)
         LOGE("error: get_addr_hdkey fail: %d", rc);
         return 1;
     }
-    rc = get_address(wa->address, &addr_hdkey);
+    rc = get_address(wa->address, &addr_hdkey, NULL, 0);
     if (rc == 0) {
         wa->index++;
     }
@@ -168,12 +168,12 @@ int wallet_get_address(struct wallet_address *wa, int *done)
 
 int wallet_new_extr_address(char address[ADDRESS_STR_MAX])
 {
-    return new_address(address, &opened_wallet.ws[WALLET_KEYS_EXTN]);
+    return new_address(address, &opened_wallet.ws[WALLET_KEYS_EXTN], NULL, 0);
 }
 
-int wallet_new_intr_address(char address[ADDRESS_STR_MAX])
+int wallet_new_intr_address(char address[ADDRESS_STR_MAX], uint8_t *scriptpubkey, size_t *len)
 {
-    return new_address(address, &opened_wallet.ws[WALLET_KEYS_INTR]);
+    return new_address(address, &opened_wallet.ws[WALLET_KEYS_INTR], scriptpubkey, len);
 }
 
 // TODO 今のところP2TR専用
@@ -198,7 +198,8 @@ int wallet_search_scriptpubkey(int *detect, struct ext_key *hdkey, const uint8_t
                     LOGE("error: get_addr_hdkey fail: %d", rc);
                     return 1;
                 }
-                rc = get_scriptpubkey_from_hdkey(spk, sizeof(spk), &addr_hdkey);
+                size_t written = sizeof(spk);
+                rc = get_scriptpubkey_from_hdkey(spk, &written, &addr_hdkey);
                 if (rc != WALLY_OK) {
                     LOGE("error: get_scriptpubkey_from_hdkey fail: %d", rc);
                     return 1;
@@ -386,7 +387,7 @@ static int create_masterkey(struct ext_key *hdkey, const char *mnemonic)
     return 0;
 }
 
-static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws)
+static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws, uint8_t *scriptpubkey, size_t *len)
 {
     int rc;
     struct ext_key addr_hdkey;
@@ -397,7 +398,7 @@ static int new_address(char address[ADDRESS_STR_MAX], struct wallet_set *ws)
         return 1;
     }
 
-    rc = get_address(address, &addr_hdkey);
+    rc = get_address(address, &addr_hdkey, scriptpubkey, len);
     if (rc != 0) {
         LOGE("error: get_address fail: %d", rc);
         return 1;
@@ -431,27 +432,38 @@ static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey
 }
 
 
-static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey)
+static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey, uint8_t *scriptpubkey, size_t *len)
 {
     int rc;
 
-    uint8_t scriptpubkey[WALLY_SCRIPTPUBKEY_P2TR_LEN];
-    rc = get_scriptpubkey_from_hdkey(scriptpubkey, sizeof(scriptpubkey), addr_hdkey);
+    uint8_t spk[WALLY_SCRIPTPUBKEY_P2TR_LEN];
+    size_t written = sizeof(spk);
+    rc = get_scriptpubkey_from_hdkey(spk, &written, addr_hdkey);
     if (rc != 0) {
         LOGE("error: get_scriptpubkey_from_hdkey fail: %d", rc);
         return 1;
     }
 
-    rc = address_from_scriptpubkey(address, scriptpubkey, sizeof(scriptpubkey));
+    rc = address_from_scriptpubkey(address, spk, written);
     if (rc != 0) {
         LOGE("error: address_from_scriptpubkey fail: %d", rc);
         return 1;
     }
 
+    if (scriptpubkey != NULL && len != NULL && *len > 0) {
+        if (*len < written) {
+            LOGE("error: scriptpubkey is too short");
+            return 1;
+        }
+        memcpy(scriptpubkey, spk, written);
+        *len = written;
+    }
+
     return 0;
 }
 
-static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t len, const struct ext_key *addr_hdkey)
+// TODO P2TR専用
+static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t *len, const struct ext_key *addr_hdkey)
 {
     int rc;
     const uint8_t *pubkey = addr_hdkey->pub_key;
@@ -459,11 +471,12 @@ static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t len, const 
     size_t written;
     rc = wally_scriptpubkey_p2tr_from_bytes(
         pubkey, EC_PUBLIC_KEY_LEN,
-        0, scriptpubkey, len, &written);
-    if (rc != WALLY_OK || written != len) {
+        0, scriptpubkey, *len, &written);
+    if (rc != WALLY_OK || written > *len) {
         LOGE("error: wally_scriptpubkey_p2tr_from_bytes fail: %d", rc);
         return 1;
     }
+    *len = written;
 
     return 0;
 }

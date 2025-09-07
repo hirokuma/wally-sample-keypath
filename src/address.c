@@ -76,6 +76,24 @@ int address_from_scriptpubkey(char address[ADDRESS_STR_MAX], const uint8_t *scri
     }
 }
 
+int address_to_scriptpubkey(uint8_t scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN], size_t *len, const char *address)
+{
+    int rc;
+    const struct conf *conf = conf_get();
+
+    rc = wally_addr_segwit_to_bytes(address, conf->addr_family, 0, scriptpubkey, WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN, len);
+    if (rc == WALLY_OK) {
+        return 0;
+    }
+
+    rc = wally_address_to_scriptpubkey(address, conf->wally_network, scriptpubkey, WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN, len);
+    if (rc != WALLY_OK) {
+        LOGE("error: wally_addr_segwit_to_bytes and wally_address_to_scriptpubkey fail: %d", rc);
+        return 1;
+    }
+    return 0;
+}
+
 /////////////////////////////////////////////////
 // Private functions
 /////////////////////////////////////////////////

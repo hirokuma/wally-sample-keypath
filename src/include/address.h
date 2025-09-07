@@ -33,6 +33,13 @@ int address_get_dustlimit(uint64_t *dustlimit, const uint8_t *scriptpubkey, size
 /// @return
 int address_from_scriptpubkey(char address[ADDRESS_STR_MAX], const uint8_t *scriptpubkey, size_t len);
 
+/// @brief
+/// @param scriptpubkey
+/// @param len
+/// @param address
+/// @return
+int address_to_scriptpubkey(uint8_t scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN], size_t *len, const char *address);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

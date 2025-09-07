@@ -54,18 +54,22 @@ def convert_to_fff(prototype):
     
     if return_type.lower() == 'void':
         if extracted_types:
-            return f"""FAKE_VOID_FUNC({function_name}, {extracted_types});
-RESET_FAKE({function_name})"""
+            return f"""DEFINE_FAKE_VOID_FUNC({function_name}, {extracted_types});
+DECLARE_FAKE_VOID_FUNC({function_name}, {extracted_types});
+        RESET_FAKE({function_name})"""
         else:
-            return f"""FAKE_VOID_FUNC({function_name});
-RESET_FAKE({function_name})"""
+            return f"""DEFINE_FAKE_VOID_FUNC({function_name});
+DECLARE_FAKE_VOID_FUNC({function_name});
+        RESET_FAKE({function_name})"""
     else:
         if extracted_types:
-            return f"""FAKE_VALUE_FUNC({return_type}, {function_name}, {extracted_types});
-RESET_FAKE({function_name})"""
+            return f"""DEFINE_FAKE_VALUE_FUNC({return_type}, {function_name}, {extracted_types});
+DECLARE_FAKE_VALUE_FUNC({return_type}, {function_name}, {extracted_types});
+        RESET_FAKE({function_name})"""
         else:
-            return f"""FAKE_VALUE_FUNC({return_type}, {function_name});
-RESET_FAKE({function_name})"""
+            return f"""DEFINE_FAKE_VALUE_FUNC({return_type}, {function_name});
+DECLARE_FAKE_VALUE_FUNC({return_type}, {function_name});
+        RESET_FAKE({function_name})"""
 
 def process_file(file_path):
     """

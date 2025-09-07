@@ -249,7 +249,7 @@ exit:
 }
 
 
-static int tweak_key_pair(
+static int tweak_keypair(
     uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN],
     uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN],
     const uint8_t privkey[EC_PRIVATE_KEY_LEN])
@@ -398,6 +398,33 @@ static int cmd_spend(int argc, char *argv[])
         goto exit;
     }
 
+    // お釣りが必要かどうか
+    //  out->satoshi - amount - fee > dust_limit
+    //  お釣りoutputが追加されると
+    //
+    // weight=*4
+    // estimate tx size
+    //  * version(4)
+    //  * input_num(1)
+    //      * txid(32), index(4)
+    //      * scriptSig(1)
+    //      * sequence(4)
+    //  * output_num(1)
+    //      * spend: P2PKH(), P2SH(), P2WPKH(22), P2WSH(34), P2TR(34)
+    //          * value(8)
+    //          * scriptpubkey(1+X)
+    //      * change: P2TR(1+34)
+    //          * value(8)
+    //          * scriptpubkey(1+34)
+    //  * locktime(4)
+    //
+    // weight=*1
+    //  * maker(1), marks(1)
+    //  * witness_num(1)
+    //      * witness: P2TR key path(1+64)
+    int has_change = 0;
+
+
     // create tx
 
     rc = wally_tx_init_alloc(
@@ -411,7 +438,7 @@ static int cmd_spend(int argc, char *argv[])
         goto exit;
     }
 
-    struct wally_tx_input TX_INPUT = {
+    struct wally_tx_input tx_input = {
         .index = out_index,
         .sequence = 0xffffffff,
         .script = NULL,
@@ -419,23 +446,62 @@ static int cmd_spend(int argc, char *argv[])
         .witness = NULL,
         .features = 0,
     };
-    memcpy(TX_INPUT.txhash, txhash, sizeof(txhash));
-    rc = wally_tx_add_input(tx, &TX_INPUT);
+    memcpy(tx_input.txhash, txhash, sizeof(txhash));
+    rc = wally_tx_add_input(tx, &tx_input);
     if (rc != WALLY_OK) {
         fprintf(stderr, "error: wally_tx_add_input fail: %d", rc);
         goto exit;
     }
 
+    char chg_addr[ADDRESS_STR_MAX];
+    uint8_t chg_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
+    size_t chg_scriptpubkey_len = sizeof(chg_scriptpubkey);
+    if (has_change) {
+        rc = wallet_new_intr_address(chg_addr, chg_scriptpubkey, &chg_scriptpubkey_len);
+        if (rc != 0) {
+            fprintf(stderr, "error: wallet_new_intr_address fail: %d", rc);
+            goto exit;
+        }
+        LOGT("change address: %s", chg_addr);
+        LOGT("change scriptpubkey");
+        DUMPT(chg_scriptpubkey, chg_scriptpubkey_len);
+    } else {
+        LOGT("no change output");
+    }
+
+    const struct wally_tx_output change = {
+        .satoshi = 0, // set after fee calc
+        .script = chg_scriptpubkey,
+        .script_len = chg_scriptpubkey_len,
+        .features = 0,
+    };
     const struct wally_tx_output TX_OUTPUT = {
         .satoshi = amount,
         .script = out_scriptpubkey,
         .script_len = out_scriptpubkey_len,
         .features = 0,
     };
-    rc = wally_tx_add_output(tx, &TX_OUTPUT);
-    if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_add_output fail: %d", rc);
-        goto exit;
+    const struct wally_tx_output *outputs[2];
+    size_t tx_output_num;
+    if (has_change) {
+        tx_output_num = 2;
+        if (rand() % 2 == 0) {
+            outputs[0] = &TX_OUTPUT;
+            outputs[1] = &change;
+        } else {
+            outputs[0] = &change;
+            outputs[1] = &TX_OUTPUT;
+        }
+    } else {
+        tx_output_num = 1;
+        outputs[0] = &TX_OUTPUT;
+    }
+    for (size_t i = 0; i < tx_output_num; i++) {
+        rc = wally_tx_add_output(tx, outputs[i]);
+        if (rc != WALLY_OK) {
+            fprintf(stderr, "error: wally_tx_add_output(%ld) fail: %d", i, rc);
+            goto exit;
+        }
     }
 
     struct wally_map *script_map;
@@ -477,9 +543,9 @@ static int cmd_spend(int argc, char *argv[])
 
     uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN];
     uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN];
-    rc = tweak_key_pair(tweak_privkey, tweak_xpubkey, &hdkey.priv_key[1]);
+    rc = tweak_keypair(tweak_privkey, tweak_xpubkey, &hdkey.priv_key[1]);
     if (rc != 0) {
-        fprintf(stderr, "error: tweak_key_pair fail: %d", rc);
+        fprintf(stderr, "error: tweak_keypair fail: %d", rc);
         goto exit;
     }
 
@@ -518,7 +584,7 @@ static int cmd_spend(int argc, char *argv[])
         fprintf(stderr, "error: wally_tx_to_bytes fail: %d", rc);
         goto exit;
     }
-    printf("hex: ");
+    printf("raw: ");
     dump(tx_data, tx_data_len);
 
 exit:
