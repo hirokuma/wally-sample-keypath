@@ -13,6 +13,12 @@ extern "C" {
 
 #define CONF_DISABLE_MAINNET
 
+// wallet
+#define PASSPHRASE      ""
+#define MNEMONIC_WORDS  (12)
+#define WALLET_FILENAME         "mnemonic.wlt"
+#define WALLET_INDEX_FILENAME   "index.wlt"
+
 /////////////////////////////////////////////////
 // Types
 /////////////////////////////////////////////////

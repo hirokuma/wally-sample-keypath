@@ -19,13 +19,6 @@ extern "C" {
 // Prototype definitions
 /////////////////////////////////////////////////
 
-/// @brief
-/// @param dustlimit
-/// @param scriptpubkey
-/// @param len
-/// @return
-int address_get_dustlimit(uint64_t *dustlimit, const uint8_t *scriptpubkey, size_t len);
-
 /// @brief Retrieve Bitcoin address from scriptPubKey
 /// @param address
 /// @param scriptpubkey

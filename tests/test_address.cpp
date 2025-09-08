@@ -28,7 +28,7 @@ class TestAddress: public testing::Test {
 
 ////////////////////////////////////////////
 
-TEST_F(TestAddress, address_get_dustlimit)
+TEST_F(TestAddress, tx_get_dustlimit)
 {
     int rc;
 
@@ -40,7 +40,7 @@ TEST_F(TestAddress, address_get_dustlimit)
     };
 
     uint64_t dustlimit;
-    rc = address_get_dustlimit(&dustlimit, NULL, 0);
+    rc = tx_get_dustlimit(&dustlimit, NULL, 0);
     ASSERT_EQ(wally_scriptpubkey_get_type_fake.call_count, 1U);
     ASSERT_EQ(rc, 0);
     ASSERT_EQ(dustlimit, 546UL);

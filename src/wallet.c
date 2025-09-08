@@ -25,20 +25,8 @@
 // Macros
 /////////////////////////////////////////////////
 
-#define PASSPHRASE      ""
-#define MNEMONIC_WORDS  (12)
-
-#define WALLET_FILENAME         "mnemonic.wlt"
-#define WALLET_INDEX_FILENAME   "index.wlt"
-
-#if defined(MAINNET)
-#   error "mainnet not supported"
-#else
-#   define WALLET_VER      BIP32_VER_TEST_PRIVATE
-#endif
-
 // m / purpose' / coin_type' / account' / change / address_index
-// purpose = 44, 49, 84
+// purpose = 44(P2PKH), 49(P2WPKH-nested-in-BIP16), 84(P2WPKH), 86(P2TR)
 // coin_type = 0(mainnet), 1(testnet)
 #define WALLET_PATH     "m/86'/1'/0'/*" // P2TR only
 
@@ -369,6 +357,7 @@ static int save_index_file(struct wallet_data *wd)
 static int create_masterkey(struct ext_key *hdkey, const char *mnemonic)
 {
     int rc;
+    const struct conf *conf = conf_get();
 
     uint8_t seed[BIP39_SEED_LEN_512];
     size_t written;
@@ -378,7 +367,13 @@ static int create_masterkey(struct ext_key *hdkey, const char *mnemonic)
         return 1;
     }
 
-    rc = bip32_key_from_seed(seed, sizeof(seed), WALLET_VER, 0, hdkey);
+    uint32_t wallet_version;
+    if (conf->network == NETWORK_MAINNET) {
+        wallet_version = BIP32_VER_MAIN_PRIVATE;
+    } else {
+        wallet_version = BIP32_VER_TEST_PRIVATE;
+    }
+    rc = bip32_key_from_seed(seed, sizeof(seed), wallet_version, 0, hdkey);
     if (rc != WALLY_OK) {
         LOGE("error: bip32_key_from_seed fail: %d", rc);
         return 1;

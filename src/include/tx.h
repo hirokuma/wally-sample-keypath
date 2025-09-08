@@ -15,6 +15,19 @@ extern "C" {
 /////////////////////////////////////////////////
 
 /// @brief
+/// @param dustlimit
+/// @param scriptpubkey
+/// @param len
+/// @return
+int tx_get_dustlimit(uint64_t *dustlimit, const uint8_t *scriptpubkey, size_t len);
+
+/// @brief
+/// @param len scriptpubkey length(without script length)
+/// @param type WALLY_SCRIPT_TYPE_XXX
+/// @return
+int tx_get_scriptpubkey_len(size_t *len, size_t type);
+
+/// @brief
 /// @param tx
 /// @param data
 /// @param len

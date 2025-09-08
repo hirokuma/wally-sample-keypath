@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <errno.h>
 
@@ -400,30 +401,45 @@ static int cmd_spend(int argc, char *argv[])
 
     // お釣りが必要かどうか
     //  out->satoshi - amount - fee > dust_limit
-    //  お釣りoutputが追加されると
+    //  お釣りoutputが追加されると +43 vbyte
     //
-    // weight=*4
     // estimate tx size
+    // == weight: x4 ==
     //  * version(4)
     //  * input_num(1)
     //      * txid(32), index(4)
     //      * scriptSig(1)
     //      * sequence(4)
     //  * output_num(1)
-    //      * spend: P2PKH(), P2SH(), P2WPKH(22), P2WSH(34), P2TR(34)
+    //      * spend:
     //          * value(8)
     //          * scriptpubkey(1+X)
-    //      * change: P2TR(1+34)
+    //              * X=P2PKH(25), P2SH(23), P2WPKH(22), P2WSH(34), P2TR(34)
+    //      * change: P2TR
     //          * value(8)
     //          * scriptpubkey(1+34)
     //  * locktime(4)
     //
-    // weight=*1
+    // == weight: x1 ==
     //  * maker(1), marks(1)
     //  * witness_num(1)
     //      * witness: P2TR key path(1+64)
     int has_change = 0;
-
+    uint64_t dust_limit;
+    rc = tx_get_dustlimit(&dust_limit, out->script, out->script_len);
+    if (rc != 0) {
+        fprintf(stderr, "error: tx_get_dustlimit fail: %d\n", rc);
+        goto exit;
+    }
+    size_t weight = 4 * (4 + 1 + 36 + 1 + 4 + 1 + 8 + 1 + out_scriptpubkey_len + 4) + (2 + 1 + 1 + 64);
+    uint16_t vbyte = (uint16_t)ceil(weight / 4.0);
+    uint64_t fee = (uint64_t)ceil(vbyte * feerate);
+    if (out->satoshi - amount - fee > dust_limit) {
+        LOGT("has_change");
+        has_change = 1;
+    } else {
+        LOGT("no change");
+    }
 
     // create tx
 

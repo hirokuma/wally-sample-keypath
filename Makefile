@@ -21,7 +21,7 @@ PKG_CONF_LIBS=\
 	wallycore \
 	libsecp256k1
 CFLAGS += `pkg-config --cflags $(PKG_CONF_LIBS)`
-LDFLAGS += `pkg-config --libs $(PKG_CONF_LIBS)`
+LDFLAGS += `pkg-config --libs $(PKG_CONF_LIBS)` -lm
 
 # default target - first one defined
 #	debug
