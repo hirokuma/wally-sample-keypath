@@ -424,21 +424,40 @@ static int cmd_spend(int argc, char *argv[])
     //  * maker(1), marks(1)
     //  * witness_num(1)
     //      * witness: P2TR key path(1+64)
-    int has_change = 0;
+    uint64_t change_amount = 0;
     uint64_t dust_limit;
     rc = tx_get_dustlimit(&dust_limit, out->script, out->script_len);
     if (rc != 0) {
         fprintf(stderr, "error: tx_get_dustlimit fail: %d\n", rc);
         goto exit;
     }
-    size_t weight = 4 * (4 + 1 + 36 + 1 + 4 + 1 + 8 + 1 + out_scriptpubkey_len + 4) + (2 + 1 + 1 + 64);
+    // fee with change output
+    size_t weight = 4 * (4 + 1 + 36 + 1 + 4 + 1 + 8 + 1 + out_scriptpubkey_len + 8 + 1 + 34 + 4) + (2 + 1 + 1 + 64);
     uint16_t vbyte = (uint16_t)ceil(weight / 4.0);
     uint64_t fee = (uint64_t)ceil(vbyte * feerate);
-    if (out->satoshi - amount - fee > dust_limit) {
-        LOGT("has_change");
-        has_change = 1;
+    LOGT("with change output");
+    LOGT("vbyte: %d", vbyte);
+    LOGT("fee: %ld", fee);
+    if (out->satoshi > amount + fee) {
+        if (out->satoshi - (amount + fee) >= dust_limit) {
+            LOGT("has_change");
+            change_amount = out->satoshi - amount - fee;
+        } else {
+            LOGT("no_change");
+        }
     } else {
-        LOGT("no change");
+        // remove change output
+        vbyte -= (8 + 1 + 34);
+        fee = (uint64_t)ceil(vbyte * feerate);
+        LOGT("remove change output");
+        LOGT("vbyte: %d", vbyte);
+        LOGT("fee: %ld", fee);
+        if (out->satoshi < amount + fee) {
+            fprintf(stderr, "amount is too large\n");
+            return 1;
+        } else {
+            LOGT("no_change");
+        }
     }
 
     // create tx
@@ -472,7 +491,7 @@ static int cmd_spend(int argc, char *argv[])
     char chg_addr[ADDRESS_STR_MAX];
     uint8_t chg_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
     size_t chg_scriptpubkey_len = sizeof(chg_scriptpubkey);
-    if (has_change) {
+    if (change_amount) {
         rc = wallet_new_intr_address(chg_addr, chg_scriptpubkey, &chg_scriptpubkey_len);
         if (rc != 0) {
             fprintf(stderr, "error: wallet_new_intr_address fail: %d", rc);
@@ -486,11 +505,12 @@ static int cmd_spend(int argc, char *argv[])
     }
 
     const struct wally_tx_output change = {
-        .satoshi = 0, // set after fee calc
+        .satoshi = change_amount,
         .script = chg_scriptpubkey,
         .script_len = chg_scriptpubkey_len,
         .features = 0,
     };
+    LOGD("amount: %ld", amount);
     const struct wally_tx_output TX_OUTPUT = {
         .satoshi = amount,
         .script = out_scriptpubkey,
@@ -499,7 +519,7 @@ static int cmd_spend(int argc, char *argv[])
     };
     const struct wally_tx_output *outputs[2];
     size_t tx_output_num;
-    if (has_change) {
+    if (change_amount) {
         tx_output_num = 2;
         if (rand() % 2 == 0) {
             outputs[0] = &TX_OUTPUT;
@@ -515,7 +535,10 @@ static int cmd_spend(int argc, char *argv[])
     for (size_t i = 0; i < tx_output_num; i++) {
         rc = wally_tx_add_output(tx, outputs[i]);
         if (rc != WALLY_OK) {
-            fprintf(stderr, "error: wally_tx_add_output(%ld) fail: %d", i, rc);
+            LOGD("TX_OUTPUT[%ld].amount = %lu", i, outputs[i]->satoshi);
+            LOGD("TX_OUTPUT[%ld].script:", i);
+            DUMPD(outputs[i]->script, outputs[i]->script_len);
+            fprintf(stderr, "error: wally_tx_add_output(%ld) fail: %d\n", i, rc);
             goto exit;
         }
     }
