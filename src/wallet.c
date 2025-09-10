@@ -64,8 +64,8 @@ static struct wallet_data opened_wallet;
 /////////////////////////////////////////////////
 
 static int create_or_load_wallet(char **mnemonic, struct wallet_data *wd);
-static int load_mnemonic_file(char **mnemonic, struct wallet_data *wd);
-static int create_mnemonic_file(char **mnemonic, struct wallet_data *wd);
+static int load_mnemonic_file(char **mnemonic);
+static int create_mnemonic_file(char **mnemonic);
 static int load_index_file(struct wallet_data *wd);
 static int save_index_file(struct wallet_data *wd);
 static int create_masterkey(struct ext_key *hdkey, const char *mnemonic);
@@ -219,9 +219,9 @@ static int create_or_load_wallet(char **mnemonic, struct wallet_data *wd)
 
     rc_stat = stat(WALLET_FILENAME, &st);
     if (rc_stat == 0) {
-        rc = load_mnemonic_file(mnemonic, wd);
+        rc = load_mnemonic_file(mnemonic);
     } else {
-        rc = create_mnemonic_file(mnemonic, wd);
+        rc = create_mnemonic_file(mnemonic);
     }
     if (rc != 0) {
         LOGE("error: create_or_load_wallet(mnemonic) fail: %d", rc);
@@ -243,7 +243,7 @@ static int create_or_load_wallet(char **mnemonic, struct wallet_data *wd)
     return rc;
 }
 
-static int load_mnemonic_file(char **mnemonic, struct wallet_data *wd)
+static int load_mnemonic_file(char **mnemonic)
 {
     int rc;
     char *wp; // work pointer
@@ -285,7 +285,7 @@ exit:
     return 1;
 }
 
-static int create_mnemonic_file(char **mnemonic, struct wallet_data *wd)
+static int create_mnemonic_file(char **mnemonic)
 {
     int rc;
     uint8_t ent[ENTROPY_LEN];

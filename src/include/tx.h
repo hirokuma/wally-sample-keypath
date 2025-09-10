@@ -11,6 +11,20 @@ extern "C" {
 #endif // __cplusplus
 
 /////////////////////////////////////////////////
+// Types
+/////////////////////////////////////////////////
+
+// TODO 名前が...
+struct tx_spend_1in_1out {
+    const uint8_t *hex;
+    size_t hex_len;
+    uint32_t out_index;
+    const char *out_addr;
+    uint64_t amount;
+    double feerate;
+};
+
+/////////////////////////////////////////////////
 // Prototype definitions
 /////////////////////////////////////////////////
 
@@ -34,6 +48,14 @@ int tx_get_scriptpubkey_len(size_t *len, size_t type);
 /// @return 0 on success, non-zero on failure.
 /// @attention tx wally_tx_free()
 int tx_decode(struct wally_tx **tx, const uint8_t *data, size_t len);
+
+/// @brief
+/// @param tx
+/// @return
+int tx_show_detail(const struct wally_tx *tx);
+
+
+int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1out *param);
 
 #ifdef __cplusplus
 }

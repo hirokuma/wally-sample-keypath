@@ -14,7 +14,7 @@ C_FILES += \
 # object files
 OBJECT_DIRECTORY = _build
 
-CFLAGS += --std=gnu99 -Wall -MMD -MP
+CFLAGS += --std=gnu99 -Wall -Wextra -MMD -MP
 CFLAGS += -Isrc/include
 
 PKG_CONF_LIBS=\
