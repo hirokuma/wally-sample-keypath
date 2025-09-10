@@ -186,17 +186,16 @@ static int cmd_tx(int argc, char *argv[])
 
     int rc;
     struct wally_tx *tx = NULL;
-    size_t len = strlen(hex_string) / 2;
-    uint8_t *hex = (uint8_t *)malloc(len);
+    size_t hex_len = strlen(hex_string) / 2;
+    uint8_t *hex = (uint8_t *)wally_malloc(hex_len);
     size_t written;
 
-    rc = wally_hex_to_bytes(hex_string, hex, len, &written);
-    if (rc != WALLY_OK || written != len) {
+    rc = wally_hex_to_bytes(hex_string, hex, hex_len, &written);
+    if (rc != WALLY_OK || written != hex_len) {
         fprintf(stderr, "error: wally_hex_to_bytes fail: %d\n", rc);
         goto exit;
     }
-    rc = tx_decode(&tx, hex, len);
-    printf("valid transaction data: %s\n", rc == 0 ? "true" : "false");
+    rc = tx_decode(&tx, hex, hex_len);
     if (rc != 0) {
         fprintf(stderr, "error: tx_decode fail: %d\n", rc);
         goto exit;
@@ -212,7 +211,7 @@ exit:
     if (tx) {
         wally_tx_free(tx);
     }
-    free(hex);
+    wally_free(hex);
     return rc;
 }
 

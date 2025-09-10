@@ -158,25 +158,25 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         rc = wally_address_to_scriptpubkey(param->out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
     }
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: cannot convert address to scriptpubkey\n");
+        LOGE("error: cannot convert address to scriptpubkey");
         goto exit;
     }
 
     struct wally_tx *input_tx = NULL;
     rc = tx_decode(&input_tx, param->hex, param->hex_len);
     if (rc != 0) {
-        fprintf(stderr, "error: tx_decode fail: %d\n", rc);
+        LOGE("error: tx_decode fail: %d", rc);
         goto exit;
     }
     if (param->out_index >= input_tx->num_outputs) {
-        fprintf(stderr, "error: out_index(%d) >= input_tx->num_outputs(%zu)\n", param->out_index, input_tx->num_outputs);
+        LOGE("error: out_index(%d) >= input_tx->num_outputs(%zu)", param->out_index, input_tx->num_outputs);
         goto exit;
     }
     uint8_t txhash[WALLY_TXHASH_LEN];
     char txid[TX_TXID_STR_MAX];
     rc = wally_tx_get_txid(input_tx, txhash, sizeof(txhash));
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_get_txid fail: %d\n", rc);
+        LOGE("error: wally_tx_get_txid fail: %d", rc);
         goto exit;
     }
     txhash_to_txid_string(txid, txhash);
@@ -187,16 +187,16 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     struct ext_key hdkey;
     rc = wallet_search_scriptpubkey(&detect, &hdkey, out->script, out->script_len);
     if (rc != 0) {
-        fprintf(stderr, "error: wallet_search_scriptpubkey fail: %d\n", rc);
+        LOGE("error: wallet_search_scriptpubkey fail: %d", rc);
         goto exit;
     }
     if (detect == 0) {
-        fprintf(stderr, "error: the outpoint(%s:%d) is not mine\n", txid, param->out_index);
+        LOGE("error: the outpoint(%s:%d) is not mine", txid, param->out_index);
         goto exit;
     }
     LOGT("spendable amount(including fee): %ld", out->satoshi);
     if (param->amount > out->satoshi) {
-        fprintf(stderr, "error: amount is too large to spend\n");
+        LOGE("error: amount is too large to spend");
         goto exit;
     }
 
@@ -229,7 +229,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     uint64_t dust_limit;
     rc = tx_get_dustlimit(&dust_limit, out->script, out->script_len);
     if (rc != 0) {
-        fprintf(stderr, "error: tx_get_dustlimit fail: %d\n", rc);
+        LOGE("error: tx_get_dustlimit fail: %d", rc);
         goto exit;
     }
     // fee with change output
@@ -254,8 +254,8 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         LOGT("vbyte: %d", vbyte);
         LOGT("fee: %ld", fee);
         if (out->satoshi < param->amount + fee) {
-            fprintf(stderr, "amount is too large\n");
-            return 1;
+            LOGE("amount is too large");
+            goto exit;
         } else {
             LOGT("no_change");
         }
@@ -270,7 +270,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         1, // vout_cnt
         tx);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_init_alloc fail: %d", rc);
+        LOGE("error: wally_tx_init_alloc fail: %d", rc);
         goto exit;
     }
 
@@ -285,7 +285,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     memcpy(tx_input.txhash, txhash, sizeof(txhash));
     rc = wally_tx_add_input(*tx, &tx_input);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_add_input fail: %d", rc);
+        LOGE("error: wally_tx_add_input fail: %d", rc);
         goto exit;
     }
 
@@ -295,7 +295,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     if (change_amount) {
         rc = wallet_new_intr_address(chg_addr, chg_scriptpubkey, &chg_scriptpubkey_len);
         if (rc != 0) {
-            fprintf(stderr, "error: wallet_new_intr_address fail: %d", rc);
+            LOGE("error: wallet_new_intr_address fail: %d", rc);
             goto exit;
         }
         LOGT("change address: %s", chg_addr);
@@ -335,10 +335,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     for (size_t i = 0; i < tx_output_num; i++) {
         rc = wally_tx_add_output(*tx, outputs[i]);
         if (rc != WALLY_OK) {
-            LOGD("TX_OUTPUT[%ld].amount = %lu", i, outputs[i]->satoshi);
-            LOGD("TX_OUTPUT[%ld].script:", i);
-            DUMPD(outputs[i]->script, outputs[i]->script_len);
-            fprintf(stderr, "error: wally_tx_add_output(%ld) fail: %d\n", i, rc);
+            LOGE("error: wally_tx_add_output(%ld) fail: %d", i, rc);
             goto exit;
         }
     }
@@ -346,7 +343,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     struct wally_map *script_map;
     rc = wally_map_init_alloc(1, NULL, &script_map);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_map_init_alloc fail: %d", rc);
+        LOGE("error: wally_map_init_alloc fail: %d", rc);
         goto exit;
     }
     rc = wally_map_add_integer(
@@ -355,7 +352,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         out->script, out->script_len);
     if (rc != WALLY_OK) {
         wally_map_free(script_map);
-        fprintf(stderr, "error: wally_map_add_integer fail: %d", rc);
+        LOGE("error: wally_map_add_integer fail: %d", rc);
         goto exit;
     }
 
@@ -376,7 +373,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     );
     wally_map_free(script_map);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_get_btc_taproot_signature_hash fail: %d", rc);
+        LOGE("error: wally_tx_get_btc_taproot_signature_hash fail: %d", rc);
         goto exit;
     }
 
@@ -384,7 +381,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN];
     rc = tweak_keypair(tweak_privkey, tweak_xpubkey, &hdkey.priv_key[1]);
     if (rc != 0) {
-        fprintf(stderr, "error: tweak_keypair fail: %d", rc);
+        LOGE("error: tweak_keypair fail: %d", rc);
         goto exit;
     }
 
@@ -396,19 +393,19 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         sig, EC_SIGNATURE_LEN
     );
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_ec_sig_from_bytes fail: %d", rc);
+        LOGE("error: wally_ec_sig_from_bytes fail: %d", rc);
         goto exit;
     }
 
     struct wally_tx_witness_stack *witness;
     rc = wally_witness_p2tr_from_sig(sig, sizeof(sig), &witness);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_witness_p2tr_from_sig fail: %d", rc);
+        LOGE("error: wally_witness_p2tr_from_sig fail: %d", rc);
         goto exit;
     }
     rc = wally_tx_set_input_witness(*tx, 0, witness);
     if (rc != WALLY_OK) {
-        fprintf(stderr, "error: wally_tx_set_input_witness fail: %d", rc);
+        LOGE("error: wally_tx_set_input_witness fail: %d", rc);
         goto exit;
     }
     wally_tx_witness_stack_free(witness);
