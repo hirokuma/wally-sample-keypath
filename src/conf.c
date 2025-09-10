@@ -73,7 +73,7 @@ static int parse_line(const char *line) {
     if (strcmp(key, "network") == 0) {
         if (strcmp(value, "mainnet") == 0) {
 #ifdef CONF_DISABLE_MAINNET
-            LOGE("mainnet not supported");
+            LOGE("\"mainnet\" not supported");
             return 1;
 #else // CONF_DISABLE_MAINNET
             LOGT("conf.network = NETWORK_MAINNET");
@@ -82,10 +82,8 @@ static int parse_line(const char *line) {
             g_conf.addr_family = "bc";
 #endif //
         } else if (strcmp(value, "testnet") == 0) {
-            LOGT("conf.network = NETWORK_TESTNET3");
-            g_conf.network = NETWORK_TESTNET3;
-            g_conf.wally_network = WALLY_NETWORK_BITCOIN_TESTNET;
-            g_conf.addr_family = "tb";
+            LOGE("\"testnet\" not supported(testnet3 or testnet4)");
+            return 1;
         } else if (strcmp(value, "testnet3") == 0) {
             LOGT("conf.network = NETWORK_TESTNET3");
             g_conf.network = NETWORK_TESTNET3;
