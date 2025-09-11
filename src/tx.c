@@ -25,6 +25,17 @@ static int tweak_keypair(
     uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN],
     uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN],
     const uint8_t privkey[EC_PRIVATE_KEY_LEN]);
+static int calc_change_amount(
+    uint64_t *change_amount,
+    const struct tx_spend_1in_1out *param,
+    const struct wally_tx_output *out);
+static int tx_spned_1in_1out(
+    struct wally_tx **tx,
+    const struct tx_spend_1in_1out *param,
+    const struct wally_tx_output *out,
+    const struct ext_key *hdkey,
+    const uint8_t txhash[WALLY_TXHASH_LEN],
+    uint64_t change_amount);
 
 /////////////////////////////////////////////////
 // Public functions
@@ -170,42 +181,124 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         goto exit;
     }
     if (detect == 0) {
-        char txid[TX_TXID_STR_MAX];
-        txhash_to_txid_string(txid, txhash);
-        LOGE("error: the outpoint(%s:%d) is not mine", txid, param->out_index);
+        LOGE("error: the out_index(%d) is not mine", param->out_index);
         goto exit;
     }
+
     LOGT("spendable amount(including fee): %ld", out->satoshi);
     if (param->amount > out->satoshi) {
         LOGE("error: amount is too large to spend");
         goto exit;
     }
 
-    // need change output?
-    //  out->satoshi - amount - fee > dust_limit
-    //
-    // estimate tx size
-    // == weight: x4 ==
-    //  * version(4)
-    //  * input_num(1)
-    //      * txid(32), index(4)
-    //      * scriptSig(1)
-    //      * sequence(4)
-    //  * output_num(1)
-    //      * spend:
-    //          * value(8)
-    //          * scriptpubkey(1+X)
-    //              * X=P2PKH(25), P2SH(23), P2WPKH(22), P2WSH(34), P2TR(34)
-    //      * change: P2TR
-    //          * value(8)
-    //          * scriptpubkey(1+34)
-    //  * locktime(4)
-    //
-    // == weight: x1 ==
-    //  * maker(1), marks(1)
-    //  * witness_num(1)
-    //      * witness: P2TR key path(1+64)
     uint64_t change_amount = 0;
+    rc = calc_change_amount(&change_amount, param, out);
+    if (rc != 0) {
+        LOGE("error: calc_change_amount fail: %d", rc);
+        goto exit;
+    }
+
+    // create tx
+    rc = tx_spned_1in_1out(tx, param, out, &hdkey, txhash, change_amount);
+    if (rc != 0) {
+        LOGE("error: tx_spned_1in_1out fail: %d", rc);
+        goto exit;
+    }
+
+exit:
+    return 0;
+}
+
+/////////////////////////////////////////////////
+// Private functions
+/////////////////////////////////////////////////
+
+static int decode_raw(struct wally_tx **tx, const uint8_t *data, size_t len)
+{
+    int rc;
+    const uint32_t flags[] = { WALLY_TX_FLAG_USE_WITNESS, 0 };
+
+    for (size_t i = 0; i < ARRAY_SIZE(flags); i++) {
+        rc = wally_tx_from_bytes(data, len, flags[i], tx);
+        if (rc == WALLY_OK) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int tweak_keypair(
+    uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN],
+    uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN],
+    const uint8_t privkey[EC_PRIVATE_KEY_LEN])
+{
+    int rc;
+
+    uint8_t pubkey[EC_PUBLIC_KEY_LEN];
+    rc = wally_ec_public_key_from_private_key(
+        privkey, EC_PRIVATE_KEY_LEN,
+        pubkey, sizeof(pubkey));
+    if (rc != WALLY_OK) {
+        LOGE("error: wally_ec_public_key_from_private_key fail: %d", rc);
+        return 1;
+    }
+
+    uint8_t tweak_pubkey[EC_PUBLIC_KEY_LEN];
+    rc = wally_ec_public_key_bip341_tweak(
+        pubkey, sizeof(pubkey),
+        NULL, 0,
+        0,
+        tweak_pubkey, sizeof(tweak_pubkey));
+    if (rc != WALLY_OK) {
+        LOGE("error: wally_ec_public_key_bip341_tweak fail: %d", rc);
+        return 1;
+    }
+    memcpy(tweak_xpubkey, tweak_pubkey + 1, EC_XONLY_PUBLIC_KEY_LEN);
+
+    rc = wally_ec_private_key_bip341_tweak(
+        privkey, EC_PRIVATE_KEY_LEN,
+        NULL, 0,
+        0,
+        tweak_privkey, EC_PRIVATE_KEY_LEN);
+    if (rc != WALLY_OK) {
+        LOGE("error: wally_ec_private_key_bip341_tweak fail: %d", rc);
+        return 1;
+    }
+
+    return 0;
+}
+
+// need change output?
+//  out->satoshi - amount - fee > dust_limit
+//
+// estimate tx size
+// == weight: x4 ==
+//  * version(4)
+//  * input_num(1)
+//      * txid(32), index(4)
+//      * scriptSig(1)
+//      * sequence(4)
+//  * output_num(1)
+//      * spend:
+//          * value(8)
+//          * scriptpubkey(1+X)
+//              * X=P2PKH(25), P2SH(23), P2WPKH(22), P2WSH(34), P2TR(34)
+//      * change: P2TR
+//          * value(8)
+//          * scriptpubkey(1+34)
+//  * locktime(4)
+//
+// == weight: x1 ==
+//  * maker(1), marks(1)
+//  * witness_num(1)
+//      * witness: P2TR key path(1+64)
+static int calc_change_amount(
+    uint64_t *change_amount,
+    const struct tx_spend_1in_1out *param,
+    const struct wally_tx_output *out)
+{
+    int rc;
+
     uint64_t dust_limit;
     rc = tx_get_dustlimit(&dust_limit, out->script, out->script_len);
     if (rc != 0) {
@@ -222,7 +315,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     if (out->satoshi > param->amount + fee) {
         if (out->satoshi - (param->amount + fee) >= dust_limit) {
             LOGT("has_change");
-            change_amount = out->satoshi - param->amount - fee;
+            *change_amount = out->satoshi - param->amount - fee;
         } else {
             LOGT("no_change");
         }
@@ -241,7 +334,19 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         }
     }
 
-    // create tx
+exit:
+    return rc;
+}
+
+static int tx_spned_1in_1out(
+    struct wally_tx **tx,
+    const struct tx_spend_1in_1out *param,
+    const struct wally_tx_output *out,
+    const struct ext_key *hdkey,
+    const uint8_t txhash[WALLY_TXHASH_LEN],
+    uint64_t change_amount)
+{
+    int rc;
 
     rc = wally_tx_init_alloc(
         1, // version
@@ -262,7 +367,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         .witness = NULL,
         .features = 0,
     };
-    memcpy(tx_input.txhash, txhash, sizeof(txhash));
+    memcpy(tx_input.txhash, txhash, WALLY_TXHASH_LEN);
     rc = wally_tx_add_input(*tx, &tx_input);
     if (rc != WALLY_OK) {
         LOGE("error: wally_tx_add_input fail: %d", rc);
@@ -359,7 +464,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
 
     uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN];
     uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN];
-    rc = tweak_keypair(tweak_privkey, tweak_xpubkey, &hdkey.priv_key[1]);
+    rc = tweak_keypair(tweak_privkey, tweak_xpubkey, &hdkey->priv_key[1]);
     if (rc != 0) {
         LOGE("error: tweak_keypair fail: %d", rc);
         goto exit;
@@ -391,64 +496,5 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     wally_tx_witness_stack_free(witness);
 
 exit:
-    return 0;
-}
-
-/////////////////////////////////////////////////
-// Private functions
-/////////////////////////////////////////////////
-
-static int decode_raw(struct wally_tx **tx, const uint8_t *data, size_t len)
-{
-    int rc;
-    const uint32_t flags[] = { WALLY_TX_FLAG_USE_WITNESS, 0 };
-
-    for (size_t i = 0; i < ARRAY_SIZE(flags); i++) {
-        rc = wally_tx_from_bytes(data, len, flags[i], tx);
-        if (rc == WALLY_OK) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-static int tweak_keypair(
-    uint8_t tweak_privkey[EC_PRIVATE_KEY_LEN],
-    uint8_t tweak_xpubkey[EC_XONLY_PUBLIC_KEY_LEN],
-    const uint8_t privkey[EC_PRIVATE_KEY_LEN])
-{
-    int rc;
-
-    uint8_t pubkey[EC_PUBLIC_KEY_LEN];
-    rc = wally_ec_public_key_from_private_key(
-        privkey, EC_PRIVATE_KEY_LEN,
-        pubkey, sizeof(pubkey));
-    if (rc != WALLY_OK) {
-        LOGE("error: wally_ec_public_key_from_private_key fail: %d", rc);
-        return 1;
-    }
-
-    uint8_t tweak_pubkey[EC_PUBLIC_KEY_LEN];
-    rc = wally_ec_public_key_bip341_tweak(
-        pubkey, sizeof(pubkey),
-        NULL, 0,
-        0,
-        tweak_pubkey, sizeof(tweak_pubkey));
-    if (rc != WALLY_OK) {
-        LOGE("error: wally_ec_public_key_bip341_tweak fail: %d", rc);
-        return 1;
-    }
-    memcpy(tweak_xpubkey, tweak_pubkey + 1, EC_XONLY_PUBLIC_KEY_LEN);
-
-    rc = wally_ec_private_key_bip341_tweak(
-        privkey, EC_PRIVATE_KEY_LEN,
-        NULL, 0,
-        0,
-        tweak_privkey, EC_PRIVATE_KEY_LEN);
-    if (rc != WALLY_OK) {
-        LOGE("error: wally_ec_private_key_bip341_tweak fail: %d", rc);
-        return 1;
-    }
-
-    return 0;
+    return rc;
 }
