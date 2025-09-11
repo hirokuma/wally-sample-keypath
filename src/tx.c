@@ -147,31 +147,26 @@ int tx_show_detail(const struct wally_tx *tx)
 int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1out *param)
 {
     int rc;
-    const struct conf *conf = conf_get();
+    const struct wally_tx *input_tx = param->input_tx;
 
-    // out_addr to script pubkey
-    size_t out_scriptpubkey_len = 0;
-    uint8_t out_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
-    rc = wally_addr_segwit_to_bytes(param->out_addr, conf->addr_family, 0, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
-    if (rc != WALLY_OK) {
-        LOGE("error: wally_address_to_scriptpubkey fail: %d", rc);
-        rc = wally_address_to_scriptpubkey(param->out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
-    }
-    if (rc != WALLY_OK) {
-        LOGE("error: cannot convert address to scriptpubkey");
-        goto exit;
-    }
+    // // out_addr to script pubkey
+    // size_t out_scriptpubkey_len = 0;
+    // uint8_t out_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
+    // rc = wally_addr_segwit_to_bytes(param->out_addr, conf->addr_family, 0, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
+    // if (rc != WALLY_OK) {
+    //     LOGE("error: wally_address_to_scriptpubkey fail: %d", rc);
+    //     rc = wally_address_to_scriptpubkey(param->out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
+    // }
+    // if (rc != WALLY_OK) {
+    //     LOGE("error: cannot convert address to scriptpubkey");
+    //     goto exit;
+    // }
 
-    struct wally_tx *input_tx = NULL;
-    rc = tx_decode(&input_tx, param->hex, param->hex_len);
-    if (rc != 0) {
-        LOGE("error: tx_decode fail: %d", rc);
-        goto exit;
-    }
     if (param->out_index >= input_tx->num_outputs) {
         LOGE("error: out_index(%d) >= input_tx->num_outputs(%zu)", param->out_index, input_tx->num_outputs);
         goto exit;
     }
+
     uint8_t txhash[WALLY_TXHASH_LEN];
     char txid[TX_TXID_STR_MAX];
     rc = wally_tx_get_txid(input_tx, txhash, sizeof(txhash));
@@ -233,7 +228,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         goto exit;
     }
     // fee with change output
-    size_t weight = 4 * (4 + 1 + 36 + 1 + 4 + 1 + 8 + 1 + out_scriptpubkey_len + 8 + 1 + 34 + 4) + (2 + 1 + 1 + 64);
+    size_t weight = 4 * (4 + 1 + 36 + 1 + 4 + 1 + 8 + 1 + param->out_scriptpubkey_len + 8 + 1 + 34 + 4) + (2 + 1 + 1 + 64);
     uint16_t vbyte = (uint16_t)ceil(weight / 4.0);
     uint64_t fee = (uint64_t)ceil(vbyte * param->feerate);
     LOGT("with change output");
@@ -311,8 +306,8 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     };
     const struct wally_tx_output TX_OUTPUT = {
         .satoshi = param->amount,
-        .script = out_scriptpubkey,
-        .script_len = out_scriptpubkey_len,
+        .script = param->out_scriptpubkey,
+        .script_len = param->out_scriptpubkey_len,
         .features = 0,
     };
     const struct wally_tx_output *outputs[2];
@@ -411,9 +406,6 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     wally_tx_witness_stack_free(witness);
 
 exit:
-    if (input_tx) {
-        wally_tx_free(input_tx);
-    }
     return 0;
 }
 

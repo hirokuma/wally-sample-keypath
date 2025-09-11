@@ -16,10 +16,10 @@ extern "C" {
 
 // TODO 名前が...
 struct tx_spend_1in_1out {
-    const uint8_t *hex;
-    size_t hex_len;
+    struct wally_tx *input_tx;
     uint32_t out_index;
-    const char *out_addr;
+    uint8_t *out_scriptpubkey;
+    size_t out_scriptpubkey_len;
     uint64_t amount;
     double feerate;
 };

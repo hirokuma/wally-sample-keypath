@@ -234,15 +234,22 @@ static int cmd_spend(int argc, char *argv[])
     struct tx_spend_1in_1out param;
     size_t written;
     char *endptr;
+    const struct conf *conf = conf_get();
 
-    param.hex_len = strlen(hex_string) / 2;
-    uint8_t *hex = wally_malloc(param.hex_len);
-    rc = wally_hex_to_bytes(hex_string, hex, param.hex_len, &written);
-    if (rc != WALLY_OK || written != param.hex_len) {
+    size_t hex_len = strlen(hex_string) / 2;
+    uint8_t *hex = wally_malloc(hex_len);
+    rc = wally_hex_to_bytes(hex_string, hex, hex_len, &written);
+    if (rc != WALLY_OK || written != hex_len) {
         fprintf(stderr, "error: wally_hex_to_bytes fail: %d\n", rc);
         goto exit;
     }
-    param.hex = hex;
+
+    param.input_tx = NULL;
+    rc = tx_decode(&param.input_tx, hex, hex_len);
+    if (rc != 0) {
+        LOGE("error: tx_decode fail: %d", rc);
+        goto exit;
+    }
 
     errno = 0;
     param.out_index = strtoul(out_index_str, &endptr, 10);
@@ -252,7 +259,19 @@ static int cmd_spend(int argc, char *argv[])
     }
     LOGT("out_index: %d", param.out_index);
 
-    param.out_addr = out_addr;
+    // out_addr to script pubkey
+    param.out_scriptpubkey_len = 0;
+    uint8_t out_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
+    param.out_scriptpubkey = out_scriptpubkey;
+    rc = wally_addr_segwit_to_bytes(out_addr, conf->addr_family, 0, out_scriptpubkey, sizeof(out_scriptpubkey), &param.out_scriptpubkey_len);
+    if (rc != WALLY_OK) {
+        LOGE("error: wally_address_to_scriptpubkey fail: %d", rc);
+        rc = wally_address_to_scriptpubkey(out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &param.out_scriptpubkey_len);
+    }
+    if (rc != WALLY_OK) {
+        LOGE("error: cannot convert address to scriptpubkey");
+        goto exit;
+    }
 
     param.amount = strtoull(amount_str, &endptr, 10);
     if (errno != 0 || *endptr != '\0') {
@@ -291,6 +310,7 @@ exit:
     if (tx) {
         wally_tx_free(tx);
     }
+    wally_tx_free(param.input_tx);
     wally_free(hex);
     return rc;
 }
