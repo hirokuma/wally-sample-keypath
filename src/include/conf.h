@@ -19,6 +19,8 @@ extern "C" {
 #define WALLET_FILENAME         "mnemonic.wlt"
 #define WALLET_INDEX_FILENAME   "index.wlt"
 
+#define DEFAULT_SEQUENCE   (0xfffffffd)
+
 /////////////////////////////////////////////////
 // Types
 /////////////////////////////////////////////////

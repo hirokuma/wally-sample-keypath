@@ -247,7 +247,7 @@ static int cmd_spend(int argc, char *argv[])
     param.input_tx = NULL;
     rc = tx_decode(&param.input_tx, hex, hex_len);
     if (rc != 0) {
-        LOGE("error: tx_decode fail: %d", rc);
+        fprintf(stderr, "error: tx_decode fail: %d\n", rc);
         goto exit;
     }
 
@@ -265,11 +265,11 @@ static int cmd_spend(int argc, char *argv[])
     param.out_scriptpubkey = out_scriptpubkey;
     rc = wally_addr_segwit_to_bytes(out_addr, conf->addr_family, 0, out_scriptpubkey, sizeof(out_scriptpubkey), &param.out_scriptpubkey_len);
     if (rc != WALLY_OK) {
-        LOGE("error: wally_address_to_scriptpubkey fail: %d", rc);
+        fprintf(stderr, "error: wally_address_to_scriptpubkey fail: %d\n", rc);
         rc = wally_address_to_scriptpubkey(out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &param.out_scriptpubkey_len);
     }
     if (rc != WALLY_OK) {
-        LOGE("error: cannot convert address to scriptpubkey");
+        fprintf(stderr, "error: cannot convert address to scriptpubkey\n");
         goto exit;
     }
 
@@ -303,7 +303,16 @@ static int cmd_spend(int argc, char *argv[])
         fprintf(stderr, "error: wally_tx_to_bytes fail: %d", rc);
         goto exit;
     }
-    printf("raw: ");
+    uint8_t txhash[WALLY_TXHASH_LEN];
+    char txid[TX_TXID_STR_MAX];
+    rc = wally_tx_get_txid(tx, txhash, sizeof(txhash));
+    if (rc != WALLY_OK) {
+        fprintf(stderr, "error: wally_tx_get_txid fail: %d\n", rc);
+        goto exit;
+    }
+    txhash_to_txid_string(txid, txhash);
+    printf("txid: %s\n", txid);
+    printf("hex: ");
     dump(tx_data, tx_data_len);
 
 exit:

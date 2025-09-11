@@ -149,33 +149,17 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
     int rc;
     const struct wally_tx *input_tx = param->input_tx;
 
-    // // out_addr to script pubkey
-    // size_t out_scriptpubkey_len = 0;
-    // uint8_t out_scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
-    // rc = wally_addr_segwit_to_bytes(param->out_addr, conf->addr_family, 0, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
-    // if (rc != WALLY_OK) {
-    //     LOGE("error: wally_address_to_scriptpubkey fail: %d", rc);
-    //     rc = wally_address_to_scriptpubkey(param->out_addr, conf->wally_network, out_scriptpubkey, sizeof(out_scriptpubkey), &out_scriptpubkey_len);
-    // }
-    // if (rc != WALLY_OK) {
-    //     LOGE("error: cannot convert address to scriptpubkey");
-    //     goto exit;
-    // }
-
     if (param->out_index >= input_tx->num_outputs) {
         LOGE("error: out_index(%d) >= input_tx->num_outputs(%zu)", param->out_index, input_tx->num_outputs);
         goto exit;
     }
 
     uint8_t txhash[WALLY_TXHASH_LEN];
-    char txid[TX_TXID_STR_MAX];
     rc = wally_tx_get_txid(input_tx, txhash, sizeof(txhash));
     if (rc != WALLY_OK) {
         LOGE("error: wally_tx_get_txid fail: %d", rc);
         goto exit;
     }
-    txhash_to_txid_string(txid, txhash);
-    LOGT("txid: %s", txid);
 
     const struct wally_tx_output *out = &input_tx->outputs[param->out_index];
     int detect = 0;
@@ -186,6 +170,8 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         goto exit;
     }
     if (detect == 0) {
+        char txid[TX_TXID_STR_MAX];
+        txhash_to_txid_string(txid, txhash);
         LOGE("error: the outpoint(%s:%d) is not mine", txid, param->out_index);
         goto exit;
     }
@@ -195,9 +181,8 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
         goto exit;
     }
 
-    // お釣りが必要かどうか
+    // need change output?
     //  out->satoshi - amount - fee > dust_limit
-    //  お釣りoutputが追加されると +43 vbyte
     //
     // estimate tx size
     // == weight: x4 ==
@@ -271,7 +256,7 @@ int tx_create_spend_1in_1out(struct wally_tx **tx, const struct tx_spend_1in_1ou
 
     struct wally_tx_input tx_input = {
         .index = param->out_index,
-        .sequence = 0xffffffff,
+        .sequence = DEFAULT_SEQUENCE,
         .script = NULL,
         .script_len = 0,
         .witness = NULL,
