@@ -14,8 +14,8 @@ SRCS_WALLY:=\
 	test_wally.cpp \
 	test_main.cpp
 
-CFLAGS += -DUNIT_TEST
-CFLAGS += -Wall -ggdb -MMD -MP
+CFLAGS += -DUNIT_TEST -ggdb -coverage
+CFLAGS += -Wall -MMD -MP
 CFLAGS += -I../src/include
 
 PKG_CONF_LIBS=\
@@ -43,13 +43,18 @@ endif
 
 test:
 	./$(BUILD)/$(BIN)
+	lcov -c -d $(BUILD) -o $(BUILD)/lcov.info
+	genhtml $(BUILD)/lcov.info --output-directory $(BUILD)/lcov
 
 wally:
 	g++ $(CFLAGS) -o $(BUILD)/$(BIN_WALLY) $(SRCS_WALLY) $(LDFLAGS) -pthread
-	./$(BUILD)/$(BIN_WALLY)
+	$(BUILD)/$(BIN_WALLY)
 
 # Include dependency files
 -include $(DEPS)
 
 clean: 
+	rm -rf $(BUILD)
+
+mrproper:
 	rm -rf $(FFF_BUILD) $(BUILD)

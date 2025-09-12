@@ -13,6 +13,8 @@
 #include <wally_bip39.h>
 #include <wally_script.h>
 
+#ifdef UNIT_TEST
+
 DECLARE_FAKE_VALUE_FUNC(int, bip32_key_from_parent_path_str, const struct ext_key *, const char *, uint32_t, uint32_t, struct ext_key *);
 DECLARE_FAKE_VALUE_FUNC(int, bip32_key_from_parent, const struct ext_key *, uint32_t, uint32_t, struct ext_key *);
 DECLARE_FAKE_VALUE_FUNC(int, bip32_key_from_seed, const unsigned char *, size_t, uint32_t, uint32_t, struct ext_key *);
@@ -27,5 +29,7 @@ DECLARE_FAKE_VALUE_FUNC(int, wally_free_string, char *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_p2tr_from_bytes, const unsigned char *, size_t, uint32_t, unsigned char *, size_t, size_t *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_get_type, const unsigned char *, size_t, size_t *);
 DECLARE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_to_address, const unsigned char *, size_t, uint32_t, char **);
+
+#endif // UNIT_TEST
 
 #endif /* FAKES_H_ */
