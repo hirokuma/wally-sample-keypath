@@ -35,7 +35,7 @@ class TestWallet: public testing::Test {
 
 ////////////////////////////////////////////
 
-TEST_F(TestWallet, test_create_masterkey)
+TEST_F(TestWallet, create_masterkey)
 {
     int rc;
     struct ext_key hdkey;
@@ -51,9 +51,9 @@ TEST_F(TestWallet, test_create_masterkey)
 TEST_F(TestWallet, get_address)
 {
     int rc;
-    struct ext_key hdkey;
+    struct ext_key hdkey = {0};
     char address[ADDRESS_STR_MAX];
 
-    rc = get_address(address, &hdkey);
+    rc = get_address(address, &hdkey, NULL, NULL);
     ASSERT_EQ(rc, 1);
 }

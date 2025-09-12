@@ -14,17 +14,19 @@ SRCS_WALLY:=\
 	test_wally.cpp \
 	test_main.cpp
 
-CFLAGS += -Wall -MMD -MP
+CFLAGS += -DUNIT_TEST
+CFLAGS += -Wall -ggdb -MMD -MP
 CFLAGS += -I../src/include
 
 PKG_CONF_LIBS=\
 	wallycore \
 	libsecp256k1
 CFLAGS += `pkg-config --cflags $(PKG_CONF_LIBS)`
-#LDFLAGS += `pkg-config --libs $(PKG_CONF_LIBS)`
+LDFLAGS += `pkg-config --libs $(PKG_CONF_LIBS)`
 
 CFLAGS += -I$(FFF_BUILD)/_deps/googletest-src/googletest/include
 LDFLAGS += -L$(FFF_BUILD)/lib -lgtest -lgtest_main
+LDFLAGS += -Wl,-Map=$(BUILD)/tst.map
 
 all: mk_fff
 	mkdir -p $(BUILD)

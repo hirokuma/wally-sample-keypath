@@ -412,6 +412,11 @@ static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey
 {
     int rc;
 
+    if (chg_hdkey->depth != 4) {
+        LOGE("addr_hdkey.depth is not 4");
+        return 1;
+    }
+
     rc = bip32_key_from_parent(chg_hdkey, index, BIP32_FLAG_KEY_PRIVATE, hdkey);
     if (rc != WALLY_OK) {
         LOGE("error: bip32_key_from_parent fail: %d", rc);
@@ -429,6 +434,11 @@ static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey
 static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey, uint8_t *scriptpubkey, size_t *len)
 {
     int rc;
+
+    if (addr_hdkey->depth != 5) {
+        LOGE("addr_hdkey.depth is not 5");
+        return 1;
+    }
 
     uint8_t spk[WALLY_SCRIPTPUBKEY_P2TR_LEN];
     size_t written = sizeof(spk);
@@ -461,6 +471,11 @@ static int get_scriptpubkey_from_hdkey(uint8_t *scriptpubkey, size_t *len, const
 {
     int rc;
     const uint8_t *pubkey = addr_hdkey->pub_key;
+
+    if (addr_hdkey->depth != 5) {
+        LOGE("addr_hdkey.depth is not 5");
+        return 1;
+    }
 
     size_t written;
     rc = wally_scriptpubkey_p2tr_from_bytes(

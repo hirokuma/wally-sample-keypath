@@ -4,12 +4,19 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifndef UNIT_TEST
 #define ENABLE_LOG_ERROR
 #define ENABLE_LOG_WARN
 #define ENABLE_LOG_INFO
 #define ENABLE_LOG_DEBUG
 #define ENABLE_LOG_TRACE
-
+#else // UNIT_TEST
+// #define ENABLE_LOG_ERROR
+// #define ENABLE_LOG_WARN
+// #define ENABLE_LOG_INFO
+// #define ENABLE_LOG_DEBUG
+// #define ENABLE_LOG_TRACE
+#endif // UNIT_TEST
 
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_RED     "\033[31m"
