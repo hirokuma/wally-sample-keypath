@@ -193,6 +193,7 @@ static int cmd_tx(int argc, char *argv[])
     rc = wally_hex_to_bytes(hex_string, hex, hex_len, &written);
     if (rc != WALLY_OK || written != hex_len) {
         fprintf(stderr, "error: wally_hex_to_bytes fail: %d\n", rc);
+        rc = 1;
         goto exit;
     }
     rc = tx_decode(&tx, hex, hex_len);
@@ -255,6 +256,7 @@ static int cmd_spend(int argc, char *argv[])
     param.out_index = strtoul(out_index_str, &endptr, 10);
     if (errno != 0 || *endptr != '\0') {
         fprintf(stderr, "error: strtoul(out_index_str) fail: %s\n", out_index_str);
+        rc = 1;
         goto exit;
     }
     LOGT("out_index: %d", param.out_index);
@@ -276,6 +278,7 @@ static int cmd_spend(int argc, char *argv[])
     param.amount = strtoull(amount_str, &endptr, 10);
     if (errno != 0 || *endptr != '\0') {
         fprintf(stderr, "error: strtoull(amount_str) fail: %s\n", amount_str);
+        rc = 1;
         goto exit;
     }
     LOGT("amount: %ld", param.amount);
@@ -283,6 +286,7 @@ static int cmd_spend(int argc, char *argv[])
     param.feerate = strtod(feerate_str, &endptr);
     if (errno != 0 || *endptr != '\0') {
         fprintf(stderr, "error: strtod(feerate_str) fail: %s\n", feerate_str);
+        rc = 1;
         goto exit;
     }
     LOGT("feerate: %lf", param.feerate);

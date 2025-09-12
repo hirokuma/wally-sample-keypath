@@ -87,14 +87,14 @@ int wallet_init(void)
     rc = create_or_load_wallet(&mnemonic, &opened_wallet);
     if (rc != 0) {
         LOGE("error: create_or_load_wallet fail: %d", rc);
-        goto exit;
+        return 1;
     }
 
     rc = create_masterkey(&parent_hdkey, mnemonic);
     (void)wally_free_string(mnemonic); // clear and free
     if (rc != 0) {
         LOGE("error: create_bip32key fail: %d", rc);
-        goto exit;
+        return 1;
     }
 
     rc = bip32_key_from_parent_path_str(
@@ -104,7 +104,7 @@ int wallet_init(void)
         &opened_wallet.ws[WALLET_KEYS_EXTN].hdkey);
     if (rc != WALLY_OK) {
         LOGE("error: bip32_key_from_parent_path_str(extn) fail: %d", rc);
-        goto exit;
+        return 1;
     }
 
     rc = bip32_key_from_parent_path_str(
@@ -114,11 +114,10 @@ int wallet_init(void)
         &opened_wallet.ws[WALLET_KEYS_INTR].hdkey);
     if (rc != WALLY_OK) {
         LOGE("error: bip32_key_from_parent_path_str(intr) fail: %d", rc);
-        goto exit;
+        return 1;
     }
 
-exit:
-    return rc;
+    return 0;
 }
 
 int wallet_get_address(struct wallet_address *wa, int *done)
@@ -315,7 +314,7 @@ static int create_mnemonic_file(char **mnemonic)
 
 exit:
     if (*mnemonic) {
-        (void)wally_free_string(*mnemonic);
+        (void)wally_free_string(*mnemonic); // clear and free
         *mnemonic = NULL;
     }
     return 1;
