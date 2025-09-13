@@ -43,8 +43,8 @@ endif
 
 test:
 	./$(BUILD)/$(BIN)
-	lcov -c -d $(BUILD) -o $(BUILD)/lcov.info
-	genhtml $(BUILD)/lcov.info --output-directory $(BUILD)/lcov
+	mkdir -p $(BUILD)/coverage
+	gcovr -r .. --html-details $(BUILD)/coverage/index.html -e $(FFF_BUILD)
 
 wally:
 	g++ $(CFLAGS) -o $(BUILD)/$(BIN_WALLY) $(SRCS_WALLY) $(LDFLAGS) -pthread
