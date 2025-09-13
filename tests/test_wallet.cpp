@@ -35,6 +35,16 @@ class TestWallet: public testing::Test {
 
 ////////////////////////////////////////////
 
+TEST_F(TestWallet, create_or_load_wallet)
+{
+    stat_fake.custom_fake = [](
+        const char *filename,
+        struct stat *stat)
+    -> int {
+        return 1;
+    };
+}
+
 TEST_F(TestWallet, create_masterkey)
 {
     int rc;

@@ -44,7 +44,7 @@ endif
 test:
 	$(BUILD)/$(BIN)
 	mkdir -p $(BUILD)/coverage
-	gcovr -r .. --html-details $(BUILD)/coverage/index.html -e $(FFF_BUILD) --delete --exclude-noncode-lines
+	gcovr -r .. --html-details $(BUILD)/coverage/index.html -e $(FFF_BUILD) --delete --exclude-throw-branches
 
 wally:
 	g++ $(CFLAGS) -o $(BUILD)/$(BIN_WALLY) $(SRCS_WALLY) $(LDFLAGS) -pthread

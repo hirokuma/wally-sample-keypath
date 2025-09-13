@@ -19,5 +19,6 @@ DEFINE_FAKE_VALUE_FUNC(int, wally_free_string, char *);
 DEFINE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_p2tr_from_bytes, const unsigned char *, size_t, uint32_t, unsigned char *, size_t, size_t *);
 DEFINE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_get_type, const unsigned char *, size_t, size_t *);
 DEFINE_FAKE_VALUE_FUNC(int, wally_scriptpubkey_to_address, const unsigned char *, size_t, uint32_t, char **);
+DEFINE_FAKE_VALUE_FUNC(int, stat, const char *, struct stat *);
 
 #endif // UNIT_TEST
