@@ -29,14 +29,103 @@ class TestAddress: public testing::Test {
 namespace {
     static const struct conf DEFAULT_CONF = {
         .network = NETWORK_REGTEST,
-        .wally_network = WALLY_NETWORK_LIQUID_REGTEST,
+        .wally_network = WALLY_NETWORK_BITCOIN_REGTEST,
         .addr_family = "bcrt"
     };
 }
 
 ////////////////////////////////////////////
 
-TEST_F(TestAddress, address_from_scriptpubkey_p2tr)
+TEST_F(TestAddress, address_from_scriptpubkey_witness)
+{
+    int rc;
+    static char OUTPUT[] = "TEST";
+
+    conf_get_fake.custom_fake = []() -> const struct conf* {
+        return &DEFAULT_CONF;
+    };
+
+    const size_t TYPES[] = {
+        WALLY_SCRIPT_TYPE_P2WPKH,
+        WALLY_SCRIPT_TYPE_P2WSH,
+        WALLY_SCRIPT_TYPE_P2TR,
+    };
+    static size_t type;
+    for (size_t i = 0; i < ARRAY_SIZE(TYPES); i++) {
+        type = TYPES[i];
+        wally_scriptpubkey_get_type_fake.custom_fake = [](
+            const unsigned char *a, size_t b, size_t *c)
+        -> int {
+            *c = type;
+            return 0;
+        };
+        wally_addr_segwit_from_bytes_fake.custom_fake = [](
+            const unsigned char *bytes,
+            size_t bytes_len,
+            const char *addr_family,
+            uint32_t flags,
+            char **output)
+        -> int {
+            *output = OUTPUT;
+            return 0;
+        };
+
+        char address[ADDRESS_STR_MAX];
+        rc = address_from_scriptpubkey(address, NULL, 0);
+        ASSERT_EQ(rc, 0);
+        ASSERT_EQ(strcmp(address, OUTPUT), 0);
+    }
+}
+
+TEST_F(TestAddress, address_from_scriptpubkey_p2pkh)
+{
+    int rc;
+    static char OUTPUT[] = "TEST";
+
+    conf_get_fake.custom_fake = []() -> const struct conf* {
+        return &DEFAULT_CONF;
+    };
+    wally_scriptpubkey_get_type_fake.custom_fake = [](
+        const unsigned char *a, size_t b, size_t *c)
+    -> int {
+        *c = WALLY_SCRIPT_TYPE_P2PKH;
+        return 0;
+    };
+    wally_scriptpubkey_to_address_fake.custom_fake = [](
+        const unsigned char *scriptpubkey,
+        size_t scriptpubkey_len,
+        uint32_t network,
+        char **output)
+    -> int {
+        *output = OUTPUT;
+        return 0;
+    };
+
+    char address[ADDRESS_STR_MAX];
+    rc = address_from_scriptpubkey(address, NULL, 0);
+    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(strcmp(address, OUTPUT), 0);
+}
+
+TEST_F(TestAddress, address_from_scriptpubkey_get_type_error)
+{
+    int rc;
+
+    conf_get_fake.custom_fake = []() -> const struct conf* {
+        return &DEFAULT_CONF;
+    };
+    wally_scriptpubkey_get_type_fake.custom_fake = [](
+        const unsigned char *a, size_t b, size_t *c)
+    -> int {
+        return WALLY_ERROR;
+    };
+
+    char address[ADDRESS_STR_MAX];
+    rc = address_from_scriptpubkey(address, NULL, 0);
+    ASSERT_EQ(rc, 1);
+}
+
+TEST_F(TestAddress, address_from_scriptpubkey_segwit_from_bytes_error)
 {
     int rc;
 
@@ -56,17 +145,15 @@ TEST_F(TestAddress, address_from_scriptpubkey_p2tr)
         uint32_t flags,
         char **output)
     -> int {
-        *output = 0;
-        return 0;
+        return 1;
     };
 
     char address[ADDRESS_STR_MAX];
     rc = address_from_scriptpubkey(address, NULL, 0);
-    ASSERT_EQ(wally_scriptpubkey_get_type_fake.call_count, 1U);
-    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(rc, 1);
 }
 
-TEST_F(TestAddress, address_from_scriptpubkey_p2pkh)
+TEST_F(TestAddress, address_from_scriptpubkey_p2pkh_error)
 {
     int rc;
 
@@ -85,14 +172,12 @@ TEST_F(TestAddress, address_from_scriptpubkey_p2pkh)
         uint32_t network,
         char **output)
     -> int {
-        *output = 0;
-        return 0;
+        return 1;
     };
 
     char address[ADDRESS_STR_MAX];
     rc = address_from_scriptpubkey(address, NULL, 0);
-    ASSERT_EQ(wally_scriptpubkey_get_type_fake.call_count, 1U);
-    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(rc, 1);
 }
 
 TEST_F(TestAddress, address_to_scriptpubkey_segwit)
@@ -168,4 +253,39 @@ TEST_F(TestAddress, address_to_scriptpubkey_nonsegwit)
     ASSERT_EQ(scriptpubkey[0], 1);
     ASSERT_EQ(scriptpubkey[1], 2);
     ASSERT_EQ(scriptpubkey[2], 3);
+}
+
+
+TEST_F(TestAddress, address_to_scriptpubkey_nonsegwit_error)
+{
+    int rc;
+
+    conf_get_fake.custom_fake = []() -> const struct conf* {
+        return &DEFAULT_CONF;
+    };
+
+    wally_addr_segwit_to_bytes_fake.custom_fake = [](
+        const char *addr,
+        const char *addr_family,
+        uint32_t flags,
+        unsigned char *bytes_out,
+        size_t len,
+        size_t *written)
+    -> int {
+        return WALLY_EINVAL;
+    };
+    wally_address_to_scriptpubkey_fake.custom_fake = [](
+        const char *addr,
+        uint32_t network,
+        unsigned char *bytes_out,
+        size_t len,
+        size_t *written)
+    -> int {
+        return 1;
+    };
+
+    uint8_t scriptpubkey[WALLY_SEGWIT_ADDRESS_PUBKEY_MAX_LEN];
+    size_t len;
+    rc = address_to_scriptpubkey(scriptpubkey, &len, "");
+    ASSERT_EQ(rc, 1);
 }

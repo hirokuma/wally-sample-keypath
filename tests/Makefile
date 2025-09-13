@@ -14,7 +14,7 @@ SRCS_WALLY:=\
 	test_wally.cpp \
 	test_main.cpp
 
-CFLAGS += -DUNIT_TEST -ggdb -coverage
+CFLAGS += -DUNIT_TEST -ggdb -O0 -coverage
 CFLAGS += -Wall -MMD -MP
 CFLAGS += -I../src/include
 
@@ -42,9 +42,9 @@ mk_fff:
 endif
 
 test:
-	./$(BUILD)/$(BIN)
+	$(BUILD)/$(BIN)
 	mkdir -p $(BUILD)/coverage
-	gcovr -r .. --html-details $(BUILD)/coverage/index.html -e $(FFF_BUILD)
+	gcovr -r .. --html-details $(BUILD)/coverage/index.html -e $(FFF_BUILD) --delete --exclude-noncode-lines
 
 wally:
 	g++ $(CFLAGS) -o $(BUILD)/$(BIN_WALLY) $(SRCS_WALLY) $(LDFLAGS) -pthread
