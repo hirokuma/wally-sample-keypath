@@ -430,7 +430,6 @@ static int get_addr_hdkey(struct ext_key *hdkey, const struct ext_key *chg_hdkey
     return 0;
 }
 
-
 static int get_address(char address[ADDRESS_STR_MAX], struct ext_key *addr_hdkey, uint8_t *scriptpubkey, size_t *len)
 {
     int rc;

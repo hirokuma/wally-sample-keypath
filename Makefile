@@ -68,7 +68,6 @@ help:
 
 
 C_SOURCE_FILES = $(addprefix $(C_DIRECTORY)/, $(C_FILES))
-C_SOURCE_FILE_NAMES = $(notdir $(C_SOURCE_FILES))
 C_PATHS = $(call rmdup, $(dir $(C_SOURCE_FILES)))
 
 C_OBJECTS = $(addprefix $(OBJECT_DIRECTORY)/, $(C_FILES:.c=.o))

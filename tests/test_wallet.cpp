@@ -8,12 +8,6 @@ extern "C" {
 #include "../src/wallet.c"
 }
 
-
-namespace {
-// address.c
-FAKE_VALUE_FUNC(int, address_from_scriptpubkey, char *, const uint8_t *, size_t);
-}
-
 class TestWallet: public testing::Test {
     void SetUp() {
         RESET_FAKE(bip32_key_from_parent_path_str)
@@ -26,7 +20,6 @@ class TestWallet: public testing::Test {
         RESET_FAKE(wally_free_string)
         RESET_FAKE(wally_malloc)
         RESET_FAKE(wally_scriptpubkey_p2tr_from_bytes)
-        RESET_FAKE(address_from_scriptpubkey)
         FFF_RESET_HISTORY();
     }
     void TearDown() {
@@ -35,15 +28,13 @@ class TestWallet: public testing::Test {
 
 ////////////////////////////////////////////
 
-TEST_F(TestWallet, create_or_load_wallet)
-{
-    stat_fake.custom_fake = [](
-        const char *filename,
-        struct stat *stat)
-    -> int {
-        return 1;
-    };
-}
+// TEST_F(TestWallet, create_or_load_wallet_create_route)
+// {
+//     stat_fake.return_val = 1;
+
+//     int rc = create_or_load_wallet(NULL, NULL);
+//     ASSERT_EQ(rc, 1);
+// }
 
 TEST_F(TestWallet, create_masterkey)
 {

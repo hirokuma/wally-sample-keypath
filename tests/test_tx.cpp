@@ -9,17 +9,13 @@ extern "C" {
 #include "../src/tx.c"
 }
 
-// conf.c
-FAKE_VALUE_FUNC(const struct conf *, conf_get);
-
 class TestAddress: public testing::Test {
     void SetUp() {
         RESET_FAKE(wally_scriptpubkey_get_type)
-        RESET_FAKE(wally_scriptpubkey_to_address)
-        RESET_FAKE(wally_addr_segwit_to_bytes)
-        RESET_FAKE(wally_address_to_scriptpubkey)
-        RESET_FAKE(wally_addr_segwit_from_bytes)
-        RESET_FAKE(conf_get)
+        // RESET_FAKE(wally_scriptpubkey_to_address)
+        // RESET_FAKE(wally_addr_segwit_to_bytes)
+        // RESET_FAKE(wally_address_to_scriptpubkey)
+        // RESET_FAKE(wally_addr_segwit_from_bytes)
         FFF_RESET_HISTORY();
     }
     void TearDown() {

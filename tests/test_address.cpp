@@ -9,9 +9,6 @@ extern "C" {
 #include "../src/address.c"
 }
 
-// conf.c
-FAKE_VALUE_FUNC(const struct conf *, conf_get);
-
 class TestAddress: public testing::Test {
     void SetUp() {
         RESET_FAKE(wally_scriptpubkey_get_type)
@@ -19,20 +16,13 @@ class TestAddress: public testing::Test {
         RESET_FAKE(wally_addr_segwit_to_bytes)
         RESET_FAKE(wally_address_to_scriptpubkey)
         RESET_FAKE(wally_addr_segwit_from_bytes)
-        RESET_FAKE(conf_get)
         FFF_RESET_HISTORY();
+
+        fakes_init();
     }
     void TearDown() {
     }
 };
-
-namespace {
-    static const struct conf DEFAULT_CONF = {
-        .network = NETWORK_REGTEST,
-        .wally_network = WALLY_NETWORK_BITCOIN_REGTEST,
-        .addr_family = "bcrt"
-    };
-}
 
 ////////////////////////////////////////////
 
@@ -40,10 +30,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_witness)
 {
     int rc;
     static char OUTPUT[] = "TEST";
-
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
 
     const size_t TYPES[] = {
         WALLY_SCRIPT_TYPE_P2WPKH,
@@ -82,9 +68,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_p2pkh)
     int rc;
     static char OUTPUT[] = "TEST";
 
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
     wally_scriptpubkey_get_type_fake.custom_fake = [](
         const unsigned char *a, size_t b, size_t *c)
     -> int {
@@ -111,9 +94,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_get_type_error)
 {
     int rc;
 
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
     wally_scriptpubkey_get_type_fake.custom_fake = [](
         const unsigned char *a, size_t b, size_t *c)
     -> int {
@@ -129,9 +109,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_segwit_from_bytes_error)
 {
     int rc;
 
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
     wally_scriptpubkey_get_type_fake.custom_fake = [](
         const unsigned char *a, size_t b, size_t *c)
     -> int {
@@ -157,9 +134,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_p2pkh_error)
 {
     int rc;
 
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
     wally_scriptpubkey_get_type_fake.custom_fake = [](
         const unsigned char *a, size_t b, size_t *c)
     -> int {
@@ -183,10 +157,6 @@ TEST_F(TestAddress, address_from_scriptpubkey_p2pkh_error)
 TEST_F(TestAddress, address_to_scriptpubkey_segwit)
 {
     int rc;
-
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
 
     wally_addr_segwit_to_bytes_fake.custom_fake = [](
         const char *addr,
@@ -216,10 +186,6 @@ TEST_F(TestAddress, address_to_scriptpubkey_segwit)
 TEST_F(TestAddress, address_to_scriptpubkey_nonsegwit)
 {
     int rc;
-
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
 
     wally_addr_segwit_to_bytes_fake.custom_fake = [](
         const char *addr,
@@ -259,10 +225,6 @@ TEST_F(TestAddress, address_to_scriptpubkey_nonsegwit)
 TEST_F(TestAddress, address_to_scriptpubkey_nonsegwit_error)
 {
     int rc;
-
-    conf_get_fake.custom_fake = []() -> const struct conf* {
-        return &DEFAULT_CONF;
-    };
 
     wally_addr_segwit_to_bytes_fake.custom_fake = [](
         const char *addr,
