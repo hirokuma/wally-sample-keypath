@@ -2,9 +2,11 @@
 
 #include <stddef.h>
 
+#include <wally_address.h>
 #include <wally_crypto.h>
 #include <wally_bip32.h>
 #include <wally_bip39.h>
+#include <wally_descriptor.h>
 
 #include "misc.h"
 
@@ -16,6 +18,14 @@ class TestWally: public testing::Test {
         FFF_RESET_HISTORY();
     }
     void TearDown() {
+    }
+
+public:
+    static void Dump(const uint8_t *data, size_t len) {
+        for (size_t i = 0; i < len; i++) {
+            printf("%02x", data[i]);
+        }
+        printf("\n");
     }
 };
 
@@ -134,4 +144,116 @@ TEST_F(TestWally, child_from_parent)
         ASSERT_EQ(memcmp(hdkeys[i].priv_key + 1, vec_priv, sizeof(vec_priv)), 0);
         ASSERT_EQ(memcmp(hdkeys[i].pub_key, vec_pub, sizeof(vec_pub)), 0);
     }
+}
+
+// BIP-86 Test Vectors
+// https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#test-vectors
+TEST_F(TestWally, descriptor)
+{
+    const char DESC_EXT[] = "tr(xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu/86'/0'/0'/0/*)";
+    const char DEST_CHG[] = "tr(xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu/86'/0'/0'/1/*)";
+    int rc;
+
+    struct wally_descriptor *desc_ext = NULL;
+    struct wally_descriptor *desc_chg = NULL;
+
+    char *output = NULL;
+    uint32_t child_num = 0;
+
+    // external
+    rc = wally_descriptor_parse(
+            DESC_EXT,
+            NULL,
+            WALLY_NETWORK_BITCOIN_MAINNET,
+            0,
+            &desc_ext
+    );
+    if (rc != WALLY_OK) {
+        printf("error: wally_descriptor_parse fail: %d\n", rc);
+        goto cleanup;
+    }
+
+    rc = wally_descriptor_to_address(
+            desc_ext,
+            0,      // variant
+            0,      // multi_index
+            child_num,    // child_num
+            0,      // flags
+            &output);
+    if (rc != WALLY_OK) {
+        printf("error: wally_descriptor_to_address fail: %d\n", rc);
+        goto cleanup;
+    }
+    printf("external: %s\n", output);
+    ASSERT_STREQ(output, "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr");
+    wally_free_string(output);
+
+    rc = wally_descriptor_parse(
+            DESC_EXT,
+            NULL,
+            WALLY_NETWORK_BITCOIN_MAINNET,
+            0,
+            &desc_ext
+    );
+    if (rc != WALLY_OK) {
+        printf("error: wally_descriptor_parse fail: %d\n", rc);
+        goto cleanup;
+    }
+
+    // change
+    rc = wally_descriptor_parse(
+            DEST_CHG,
+            NULL,
+            WALLY_NETWORK_BITCOIN_MAINNET,
+            0,
+            &desc_chg
+    );
+    if (rc != WALLY_OK) {
+        printf("error: wally_descriptor_parse(chg) fail: %d\n", rc);
+        goto cleanup;
+    }
+
+    rc = wally_descriptor_to_address(
+            desc_chg,
+            0,      // variant
+            0,      // multi_index
+            child_num,    // child_num
+            0,      // flags
+            &output);
+    if (rc != WALLY_OK) {
+        printf("error: wally_descriptor_to_address fail(chg): %d\n", rc);
+        goto cleanup;
+    }
+    printf("internal: %s\n", output);
+    ASSERT_STREQ(output, "bc1p3qkhfews2uk44qtvauqyr2ttdsw7svhkl9nkm9s9c3x4ax5h60wqwruhk7");
+    wally_free_string(output);
+
+cleanup:
+    if (desc_ext) {
+        wally_descriptor_free(desc_ext);
+    }
+}
+
+// BIP-86 Test Vectors
+// https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#test-vectors
+TEST_F(TestWally, base58_ext)
+{
+    int rc;
+    struct ext_key hdkey = {0}, childkey = {0};
+
+    // m
+    rc = bip32_key_from_base58("xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu", &hdkey);
+    ASSERT_EQ(rc, WALLY_OK);
+    TestWally::Dump(hdkey.priv_key + 1, 32);
+    TestWally::Dump(hdkey.pub_key, 33);
+
+    rc = bip32_key_from_parent_path_str(
+        &hdkey,
+        "m/86'/0'/0'/0/*", 0,
+        BIP32_FLAG_STR_WILDCARD,
+        &childkey);
+    ASSERT_EQ(rc, WALLY_OK);
+
+    TestWally::Dump(childkey.priv_key + 1, 32);
+    TestWally::Dump(childkey.pub_key, 33);
 }

@@ -85,3 +85,10 @@ $ make cov
 ```
 
 After successful, you can browse `tests/_build/coverage/index.html`.
+
+### Wally API usage test
+
+```shell
+$ cd tests
+$ make -f Makefile_wally.mk
+```

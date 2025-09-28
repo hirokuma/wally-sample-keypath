@@ -15,12 +15,6 @@ DEPS = $(OBJECTS:.o=.d)
 FAKES_DIR:=fakes
 FAKES_SRCS := $(wildcard $(FAKES_DIR)/*.cpp)
 
-# libwally-core usage test
-BIN_WALLY:=tst_wally
-SRCS_WALLY:=\
-	test_wally.cpp \
-	test_main.cpp
-
 CFLAGS += -DUNIT_TEST
 CFLAGS += -I../src/include -Ifff -Ifakes
 CFLAGS += -I$(FFF_BUILD)/_deps/googletest-src/googletest/include
@@ -54,8 +48,6 @@ $(BUILD)/%.o: %.cpp
 	@echo "compile: $< ..."
 	@$(CPP) $(CFLAGS) -c -o $@ $<
 
-#@$(CPP) $(CFLAGS) -o $(basename $@) $(basename $@).o $(BUILD)/test_main.o $(LDFLAGS)
-
 $(TESTS): $(BUILD)/%: $(BUILD)/%.o $(BUILD)/test_main.o $(FAKES_DIR)/$(BUILD)/$(FAKE_LIB)
 	@echo "link: $@"
 	@$(CPP) $(CFLAGS) -o $@ $< $(BUILD)/test_main.o $(LDFLAGS)
@@ -67,10 +59,6 @@ tests: $(TESTS)
 	done; \
 	$(MK) -p $(BUILD)/coverage; \
 	gcovr -r .. --html-details $(GCOVR_HTML) -e $(FFF_BUILD) $(GCOVR_OPT)
-
-wally:
-	$(CPP) $(CFLAGS) -o $(BUILD)/$(BIN_WALLY) $(SRCS_WALLY) $(LDFLAGS) -pthread
-	$(BUILD)/$(BIN_WALLY)
 
 clean: 
 	$(RM) $(BUILD) $(FAKES_DIR)/$(BUILD)
