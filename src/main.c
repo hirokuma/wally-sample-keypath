@@ -123,7 +123,7 @@ static int cmd_help(int argc, char *argv[])
     printf("  newaddr           Get new address.\n");
     printf("  tx <hex_string>   Decode transaction hex string.\n");
     printf("\n");
-    printf("  spend <input_hex> <out_index> <output_address> <amount_sats> <feerate>   Decode transaction hex string.\n");
+    printf("  spend <input_hex> <out_index> <output_address> <amount_sats> <feerate>   Create a spendable transaction.\n");
     printf("\n");
     printf("  help              Show this help message and exit.\n");
 
